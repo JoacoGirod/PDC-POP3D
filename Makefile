@@ -2,3 +2,6 @@ CFLAGS = -std=c11 -pedantic -pedantic-errors -g -Wall -Werror -Wextra -Wno-unuse
 
 pop3d: main.o
 	$(CC) $(CFLAGS) -o pop3d main.o
+
+clean:
+    rm -f pop3d main.o
