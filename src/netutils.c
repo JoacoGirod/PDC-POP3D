@@ -58,7 +58,7 @@ int
 sock_blocking_write(const int fd, buffer *b) {
         int  ret = 0;
     ssize_t  nwritten;
-	 size_t  n;
+	size_t  n;
 	uint8_t *ptr;
 
     do {

@@ -11,12 +11,23 @@
 #include <limits.h>
 #include <errno.h>
 #include <pthread.h>
+#include <signal.h>
+#include <stdbool.h>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
 
 #include <unistd.h>
 
+#include "buffer.h"
+#include "netutils.h"
+#include "tests.h"
+
+static bool done = false;
+static void sigterm_handler(const int signal) {
+    printf("signal %d , cleaning up and exiting\n", signal);
+    done = true;
+}
 
 /**
  * estructura utilizada para transportar datos entre el hilo
@@ -29,7 +40,6 @@ struct connection {
 };
 
 
-
 /**
  * maneja cada conexión entrante
  *
@@ -37,11 +47,55 @@ struct connection {
  * @param caddr información de la conexiónentrante.
  */
 static void pop3_handle_connection(const int fd, const struct sockaddr *caddr) {
-    // TODO el write deberia ser un loop hasta que se escriban todos los bytes
-    write(fd, "+OK POP3 server ready (^-^)\r\n", 29);
-    char buffer[1024];
-    read(fd, buffer, 1024);
+    // Buffer Initialization
+    struct buffer serverBuffer;
+    buffer *b = &serverBuffer;
+    uint8_t serverDirectBuffer[512];
+    buffer_init(&serverBuffer, N(serverDirectBuffer), serverDirectBuffer);
+
+    // struct buffer clientBuffer;
+    // buffer *b2 = &clientBuffer;
+    // uint8_t clientDirectBuffer[512];
+    // buffer_init(&clientBuffer, N(clientDirectBuffer), clientDirectBuffer);
+
+    // Initial State : Salute
+    memcpy(serverDirectBuffer, "+OK POP3 server ready (^-^)\r\n", 29);
+    buffer_write_adv(b,29);
+    sock_blocking_write(fd,b);
+
+    // Read Client Command
+    // {
+    //     bool error = false;
+    //     size_t buffsize;
+    //     ssize_t n;
+    //     do {
+    //         uint8_t *ptr = buffer_write_ptr(&clientBuffer, &buffsize);
+    //         n = recv(fd, ptr, buffsize, 0);
+    //         if(n > 0) {
+    //             buffer_write_adv(&clientBuffer, n);
+    //         } else {
+    //             break;
+    //         }
+    //     } while(true);
+
+    //     // if(!hello_is_done(hello_parser.state, &error)) {
+    //     //     error = true;
+    //     // }
+    //     // hello_parser_close(&hello_parser);
+    //     // return error;
+    // }
+
+
+
+
+
+
+
+
+
     close(fd);
+
+
 }
 
 /** rutina de cada hilo worker */
@@ -60,7 +114,7 @@ static void *handle_connection_pthread(void *args) {
  * @param server   puerto de pop3 donde se sirve.
  */
 int serve_pop3_concurrent_blocking(const int server) {
-    for (;;) {
+    for (;!done;) {
         struct sockaddr_in6 caddr;
         socklen_t caddrlen = sizeof (caddr);
         // Wait for a client to connect
@@ -137,6 +191,11 @@ int main(const int argc, const char **argv) {
         err_msg = "unable to listen";
         goto finally;
     }
+
+    // registrar sigterm es util para terminar el programa normalmente, ayuda mucho en herramientas como valgrind
+    signal(SIGTERM, sigterm_handler);
+    signal(SIGINT, sigterm_handler);
+
 
     err_msg = 0;
     int ret = serve_pop3_concurrent_blocking(server);
