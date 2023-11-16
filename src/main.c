@@ -15,10 +15,11 @@
 #include "buffer.h"
 #include "netutils.h"
 #include "tests.h"
+#include "logger.h"
 
 static bool done = false;
 static void sigterm_handler(const int signal) {
-    printf("signal %d , cleaning up and exiting\n", signal);
+    printf("\nSignal %d , cleaning up and exiting\n", signal);
     done = true;
 }
 
@@ -29,13 +30,15 @@ struct connection {
     int fd;
     socklen_t addrlen;
     struct sockaddr_in6 addr;
+    Logger* logger;
 };
 
 
 /**
  * Main Handling Function for incoming requests
  */
-static void pop3_handle_connection(const int fd, const struct sockaddr *caddr) {
+static void pop3_handle_connection(const struct connection *conn) {
+    log_message(conn->logger, INFO, THREADMAINHANDLER, "Executing Main Handler");
     // Buffer Initialization
     struct buffer serverBuffer;
     buffer *pServerBuffer = &serverBuffer;
@@ -46,7 +49,7 @@ static void pop3_handle_connection(const int fd, const struct sockaddr *caddr) {
     // Initial State: Salute
     memcpy(serverDataBuffer, "+OK POP3 server ready (^-^)\r\n", 30);
     buffer_write_adv(pServerBuffer, 30);
-    sock_blocking_write(fd, pServerBuffer);
+    sock_blocking_write(conn->fd, pServerBuffer);
 
     bool error = false;
     size_t availableSpace;
@@ -58,13 +61,13 @@ static void pop3_handle_connection(const int fd, const struct sockaddr *caddr) {
 
         // Receive the information sent by the client and save it in the buffer
         // TODO add relevant flags to this call
-        bytesRead = recv(fd, ptr, availableSpace, 0);
+        bytesRead = recv(conn->fd, ptr, availableSpace, 0);
 
         // TODO this could fail if the TCP Stream doesnt have the complete command, it should have a cumulative variable and reset it when a command is succesfully parsed
         if (bytesRead > 0) {
             // Check if the received command exceeds the maximum length defined in the RFC Extension
             if (bytesRead > 255) {
-                // Handle the error (you may want to implement proper error handling)
+                // TODO improve error handling here
                 fprintf(stderr, "Received command exceeds the maximum allowed length\n");
                 error = true;
                 break;
@@ -87,53 +90,90 @@ static void pop3_handle_connection(const int fd, const struct sockaddr *caddr) {
         }
     } while (!error && bytesRead > 0);
 
-    close(fd);
+    close(conn->fd);
 }
 
-
-
-/**
- * Unique thread handler
- */
+// Modify the function call to pass the connection struct
 static void *handle_connection_pthread(void *args) {
-    // Session Struct could be initialized here or inside the thread
-    // Initializing it here would make it easier to free the resoureces
-    // Session Attributes : state, username, directory...
+    struct connection *c = args;
 
-    const struct connection *c = args;
-    pthread_detach(pthread_self()); // Configure thread to instantly free resources after its termination
-    pop3_handle_connection(c->fd, (struct sockaddr *)&c->addr);
+    char threadLogFileName[20];  // Adjust the size as needed
+    sprintf(threadLogFileName, "threadLog%d.log", c->fd);
+    // Initialize the logger for the client thread
+    Logger* clientThreadLogs = initialize_logger(threadLogFileName);
+
+    log_message(clientThreadLogs, INFO, THREAD, "Executing Thread Routine");
+
+    // Session Struct could be initialized here or inside the thread
+    // Initializing it here would make it easier to free the resources
+    // Session Attributes: state, username, directory...
+    // Connection could have Session nested
+
+    // Add the Logger to the connection struct
+    c->logger = clientThreadLogs;
+
+    pthread_detach(pthread_self());
+    pop3_handle_connection(c);
     free(args);
     return 0;
 }
 
+// Function to handle the client without threading
+static void handle_client_without_threading(int client, const struct sockaddr_in6 *caddr) {
+    // Create a unique log file name for the thread
+    char threadLogFileName[20];  // Adjust the size as needed
+    sprintf(threadLogFileName, "threadLog%d.log", client);
+
+    // Initialize the logger with the thread-specific log file
+    Logger* clientThreadLogs = initialize_logger(threadLogFileName);
+
+    log_message(clientThreadLogs, ERROR, ITERATIVETHREAD, "Iterative thread running");
+
+    // Create a connection struct with the necessary information
+    struct connection conn;
+    conn.fd = client;
+    conn.addrlen = sizeof(struct sockaddr_in6);
+    memcpy(&(conn.addr), caddr, sizeof(struct sockaddr_in6));
+    conn.logger = clientThreadLogs;  // You can set it to NULL or initialize a separate logger here
+
+    // Call the original handling function
+    pop3_handle_connection(&conn);
+
+    // Close the client socket
+    close(client);
+}
 
 /**
  * Attends clients and assigns unique blocking threads to each one
  */
 int serve_pop3_concurrent_blocking(const int server) {
-    for (;!done;) {
+    Logger* distributorThreadLogger = initialize_logger("distributorThreadLogs.log");
+    log_message(distributorThreadLogger, INFO, DISTRIBUTORTHREAD, "Running...");
+    for (; !done;) {
         struct sockaddr_in6 caddr;
-        socklen_t caddrlen = sizeof (caddr);
+        socklen_t caddrlen = sizeof(caddr);
         // Wait for a client to connect
         const int client = accept(server, (struct sockaddr*)&caddr, &caddrlen);
         if (client < 0) {
-            perror("unable to accept incoming socket");
+            log_message(distributorThreadLogger, ERROR, DISTRIBUTORTHREAD, "Unable to accept incoming socket");
         } else {
             // TODO(juan): limitar la cantidad de hilos concurrentes
-            struct connection* c = malloc(sizeof (struct connection));
+            struct connection* c = malloc(sizeof(struct connection));
             if (c == NULL) {
-                // We transition into an iterative manner
-                pop3_handle_connection(client, (struct sockaddr*)&caddr);
+                // We transition into a non-threaded manner
+                log_message(distributorThreadLogger, INFO, DISTRIBUTORTHREAD, "Memory Allocation failed, transitioning into non-threaded manner");
+                handle_client_without_threading(client, &caddr);
             } else {
                 pthread_t tid;
                 c->fd = client;
                 c->addrlen = caddrlen;
                 memcpy(&(c->addr), &caddr, caddrlen);
+                log_message(distributorThreadLogger, INFO, DISTRIBUTORTHREAD, "Attempting to create a Thread");
                 if (pthread_create(&tid, 0, handle_connection_pthread, c)) {
                     free(c);
-                    // We transition into an iterative manner
-                    pop3_handle_connection(client, (struct sockaddr*)&caddr);
+                    // We transition into a non-threaded manner
+                    log_message(distributorThreadLogger, INFO, DISTRIBUTORTHREAD, "Thread Creation Failed, transitioning into non-threaded manner");
+                    handle_client_without_threading(client, &caddr);
                 }
             }
         }
@@ -142,6 +182,8 @@ int serve_pop3_concurrent_blocking(const int server) {
 }
 
 int main(const int argc, const char **argv) {
+    Logger* mainLogger = initialize_logger("mainLogs.log");
+
     unsigned port = 1110; // Standard Port defined in class
 
     // Port can be changed through arguments
@@ -152,12 +194,12 @@ int main(const int argc, const char **argv) {
         const long sl = strtol(argv[1], &end, 10);
 
         if (end == argv[1]|| '\0' != *end || ((LONG_MIN == sl || LONG_MAX == sl) && ERANGE == errno) || sl < 0 || sl > USHRT_MAX) {
-            fprintf(stderr, "port should be an integer: %s\n", argv[1]);
+            log_message(mainLogger, ERROR, SETUP, "Port Should be an integer :  %s", argv[1]);
             return 1;
         }
         port = sl;
     } else {
-        fprintf(stderr, "Usage: %s <port>\n", argv[0]);
+        log_message(mainLogger, ERROR, SETUP, "Usage: %s <port>\n", argv[0]);
         return 1;
     }
 
@@ -171,24 +213,24 @@ int main(const int argc, const char **argv) {
 
     const int server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if(server < 0) {
-        err_msg = "unable to create socket";
+        err_msg = "Unable to create socket";
         goto finally;
     }
 
-    fprintf(stdout, "Listening on TCP port %d\n", port);
+    log_message(mainLogger, INFO, SETUP, "Listening on TCP port %d", port);
 
     // Server is configured to not wait for the last bytes transfered after the FIN in the TCP Connection
     // This allows for quick restart of the server, should only be used in development
     setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
 
     if(bind(server, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
-        err_msg = "unable to bind socket";
+        err_msg = "Unable to bind socket";
         goto finally;
     }
 
     // TODO : change this number from 20 to 500 to allow for more concurrent connections
     if (listen(server, 20) < 0) {
-        err_msg = "unable to listen";
+        err_msg = "Unable to listen";
         goto finally;
     }
 
@@ -202,7 +244,7 @@ int main(const int argc, const char **argv) {
 
 finally:
     if(err_msg) {
-        perror(err_msg);
+        log_message(mainLogger, ERROR, SETUP, err_msg);
         ret = 1;
     }
     if(server >= 0) {
