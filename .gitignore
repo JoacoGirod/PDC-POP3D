@@ -1,0 +1,35 @@
+# Ignore system files
+.DS_Store
+Thumbs.db
+
+# Ignore compiled binaries and libraries
+*.so
+*.o
+*.a
+
+# Ignore build and temporary files
+/build/
+/temp/
+*.log
+*.swp
+
+# Ignore compiled binaries and executables
+/target/
+
+# Ignore user-specific files
+.idea/
+.vscode/
+
+# Ignore dependencies
+/vendor/
+/node_modules/
+
+# Ignore patches
+/Patches/
+
+# Ignore compiled programs
+*.out
+*.exe
+
+# Ignore backups
+*~

@@ -1,10 +1,3 @@
-/**
- * main.c - servidor proxy socks concurrente
- *
- * Interpreta los argumentos de línea de comandos, y monta un socket
- * pasivo. Por cada nueva conexión lanza un hilo que procesará de
- * forma bloqueante utilizando el protocolo SOCKS5.
- */
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -30,8 +23,7 @@ static void sigterm_handler(const int signal) {
 }
 
 /**
- * estructura utilizada para transportar datos entre el hilo
- * que acepta sockets y los hilos que procesa cada conexión
+ * Structure used to transport information from the distributor thread onto the client handler threads
  */
 struct connection {
     int fd;
@@ -41,67 +33,75 @@ struct connection {
 
 
 /**
- * maneja cada conexión entrante
- *
- * @param fd   descriptor de la conexión entrante.
- * @param caddr información de la conexiónentrante.
+ * Main Handling Function for incoming requests
  */
 static void pop3_handle_connection(const int fd, const struct sockaddr *caddr) {
     // Buffer Initialization
     struct buffer serverBuffer;
-    buffer *b = &serverBuffer;
-    uint8_t serverDirectBuffer[512];
-    buffer_init(&serverBuffer, N(serverDirectBuffer), serverDirectBuffer);
+    buffer *pServerBuffer = &serverBuffer;
+    // TODO verify this size is the correct, big mails case!
+    uint8_t serverDataBuffer[512];
+    buffer_init(&serverBuffer, N(serverDataBuffer), serverDataBuffer);
 
-    // struct buffer clientBuffer;
-    // buffer *b2 = &clientBuffer;
-    // uint8_t clientDirectBuffer[512];
-    // buffer_init(&clientBuffer, N(clientDirectBuffer), clientDirectBuffer);
+    // Initial State: Salute
+    memcpy(serverDataBuffer, "+OK POP3 server ready (^-^)\r\n", 30);
+    buffer_write_adv(pServerBuffer, 30);
+    sock_blocking_write(fd, pServerBuffer);
 
-    // Initial State : Salute
-    memcpy(serverDirectBuffer, "+OK POP3 server ready (^-^)\r\n", 29);
-    buffer_write_adv(b,29);
-    sock_blocking_write(fd,b);
+    bool error = false;
+    size_t availableSpace;
+    ssize_t bytesRead;
 
-    // Read Client Command
-    // {
-    //     bool error = false;
-    //     size_t buffsize;
-    //     ssize_t n;
-    //     do {
-    //         uint8_t *ptr = buffer_write_ptr(&clientBuffer, &buffsize);
-    //         n = recv(fd, ptr, buffsize, 0);
-    //         if(n > 0) {
-    //             buffer_write_adv(&clientBuffer, n);
-    //         } else {
-    //             break;
-    //         }
-    //     } while(true);
+    do {
+        // Function buffer_write_ptr() returns the pointer to the writable area and the amount of bytes I can write
+        uint8_t *ptr = buffer_write_ptr(pServerBuffer, &availableSpace);
 
-    //     // if(!hello_is_done(hello_parser.state, &error)) {
-    //     //     error = true;
-    //     // }
-    //     // hello_parser_close(&hello_parser);
-    //     // return error;
-    // }
+        // Receive the information sent by the client and save it in the buffer
+        // TODO add relevant flags to this call
+        bytesRead = recv(fd, ptr, availableSpace, 0);
 
+        // TODO this could fail if the TCP Stream doesnt have the complete command, it should have a cumulative variable and reset it when a command is succesfully parsed
+        if (bytesRead > 0) {
+            // Check if the received command exceeds the maximum length defined in the RFC Extension
+            if (bytesRead > 255) {
+                // Handle the error (you may want to implement proper error handling)
+                fprintf(stderr, "Received command exceeds the maximum allowed length\n");
+                error = true;
+                break;
+            }
 
+            // Advance the write pointer in the buffer by the number of bytes received
+            buffer_write_adv(pServerBuffer, bytesRead);
 
-
-
-
-
-
+            // Process the received data (you may want to implement your command handling logic here)
+            // For now, let's print what we received
+            printf("Received from client: %.*s", (int)bytesRead, ptr);
+        } else if (bytesRead == 0) {
+            // Connection closed by the client
+            break;
+        } else {
+            // Handle the error (you may want to implement proper error handling)
+            perror("recv");
+            error = true;
+            break;
+        }
+    } while (!error && bytesRead > 0);
 
     close(fd);
-
-
 }
 
-/** rutina de cada hilo worker */
+
+
+/**
+ * Unique thread handler
+ */
 static void *handle_connection_pthread(void *args) {
+    // Session Struct could be initialized here or inside the thread
+    // Initializing it here would make it easier to free the resoureces
+    // Session Attributes : state, username, directory...
+
     const struct connection *c = args;
-    pthread_detach(pthread_self());
+    pthread_detach(pthread_self()); // Configure thread to instantly free resources after its termination
     pop3_handle_connection(c->fd, (struct sockaddr *)&c->addr);
     free(args);
     return 0;
@@ -109,9 +109,7 @@ static void *handle_connection_pthread(void *args) {
 
 
 /**
- * atiende a los clientes de forma concurrente con I/O bloqueante.
- *
- * @param server   puerto de pop3 donde se sirve.
+ * Attends clients and assigns unique blocking threads to each one
  */
 int serve_pop3_concurrent_blocking(const int server) {
     for (;!done;) {
@@ -125,7 +123,7 @@ int serve_pop3_concurrent_blocking(const int server) {
             // TODO(juan): limitar la cantidad de hilos concurrentes
             struct connection* c = malloc(sizeof (struct connection));
             if (c == NULL) {
-                // lo trabajamos iterativamente
+                // We transition into an iterative manner
                 pop3_handle_connection(client, (struct sockaddr*)&caddr);
             } else {
                 pthread_t tid;
@@ -133,9 +131,9 @@ int serve_pop3_concurrent_blocking(const int server) {
                 c->addrlen = caddrlen;
                 memcpy(&(c->addr), &caddr, caddrlen);
                 if (pthread_create(&tid, 0, handle_connection_pthread, c)) {
-                free(c);
-                // lo trabajamos iterativamente
-                pop3_handle_connection(client, (struct sockaddr*)&caddr);
+                    free(c);
+                    // We transition into an iterative manner
+                    pop3_handle_connection(client, (struct sockaddr*)&caddr);
                 }
             }
         }
@@ -144,9 +142,9 @@ int serve_pop3_concurrent_blocking(const int server) {
 }
 
 int main(const int argc, const char **argv) {
-    unsigned port = 1110; // numero de puerto estandarizado por la catedra
+    unsigned port = 1110; // Standard Port defined in class
 
-    // se puede cambiar el puerto por argumento
+    // Port can be changed through arguments
     if(argc == 1) {
         // utilizamos el default
     } else if(argc == 2) {
@@ -162,6 +160,7 @@ int main(const int argc, const char **argv) {
         fprintf(stderr, "Usage: %s <port>\n", argv[0]);
         return 1;
     }
+
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family      = AF_INET;
@@ -178,8 +177,8 @@ int main(const int argc, const char **argv) {
 
     fprintf(stdout, "Listening on TCP port %d\n", port);
 
-    // man 7 ip. no importa reportar nada si falla.
-    // permite quick restart del server sin esperar al FIN adecuado de TCP
+    // Server is configured to not wait for the last bytes transfered after the FIN in the TCP Connection
+    // This allows for quick restart of the server, should only be used in development
     setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &(int){ 1 }, sizeof(int));
 
     if(bind(server, (struct sockaddr*) &addr, sizeof(addr)) < 0) {
@@ -187,12 +186,13 @@ int main(const int argc, const char **argv) {
         goto finally;
     }
 
+    // TODO : change this number from 20 to 500 to allow for more concurrent connections
     if (listen(server, 20) < 0) {
         err_msg = "unable to listen";
         goto finally;
     }
 
-    // registrar sigterm es util para terminar el programa normalmente, ayuda mucho en herramientas como valgrind
+    // Registering SIGTERM helps tools like Valgrind
     signal(SIGTERM, sigterm_handler);
     signal(SIGINT, sigterm_handler);
 
