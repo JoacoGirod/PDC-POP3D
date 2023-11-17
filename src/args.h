@@ -16,8 +16,8 @@ struct pop3args
 {
     char *pop3_addr;
     unsigned short pop3_port;
-    char *mng_addr;
-    unsigned short mng_port;
+    char *conf_addr;
+    unsigned short conf_port;
     bool disectors_enabled;
     struct users users[MAX_USERS];
 };

@@ -94,33 +94,33 @@ void parseCommand(uint8_t *commandToParse, Logger *logger)
     log_message(logger, INFO, COMMANDPARSER, "Arriving Command '%s'", (char *)commandToParse);
     log_message(logger, INFO, COMMANDPARSER, "Arriving Command Length %d", strlen((char *)commandToParse));
 
-    char *token = strtok(commandToParse, "\r\n");
-    char *command = strtok(token, " ");
-    char *arg = strtok(NULL, " ");
+    // char *token = strtok(commandToParse, "\r\n");
+    // char *command = strtok(token, " ");
+    // char *arg = strtok(NULL, " ");
 
-    CommandHandler handlers[] = {
-        {"USER", handleUser},
-        {"PASS", handlePass},
-        {"STAT", handleStat},
-        {"LIST", handleList},
-        {"RETR", handleRetr},
-        {"RSET", handleRset},
-        {"DELE", handleDele},
-        {"NOOP", handleNoop},
-        {"QUIT", handleQuit},
-        {"CAPA", handleCapa},
-    };
+    // CommandHandler handlers[] = {
+    //     {"USER", handleUser},
+    //     {"PASS", handlePass},
+    //     {"STAT", handleStat},
+    //     {"LIST", handleList},
+    //     {"RETR", handleRetr},
+    //     {"RSET", handleRset},
+    //     {"DELE", handleDele},
+    //     {"NOOP", handleNoop},
+    //     {"QUIT", handleQuit},
+    //     {"CAPA", handleCapa},
+    // };
 
-    int numHandlers = sizeof(handlers) / sizeof(handlers[0]);
+    // int numHandlers = sizeof(handlers) / sizeof(handlers[0]);
 
-    for (int i = 0; i < numHandlers; ++i)
-    {
-        if (strcmp(command, handlers[i].command) == 0)
-        {
-            handlers[i].handler(arg);
-            return;
-        }
-    }
+    // for (int i = 0; i < numHandlers; ++i)
+    // {
+    //     if (strcmp(command, handlers[i].command) == 0)
+    //     {
+    //         handlers[i].handler(arg);
+    //         return;
+    //     }
+    // }
 
     printf("Invalid command\n");
 }
