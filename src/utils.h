@@ -1,7 +1,7 @@
-// parser.h
+// utils.h
 
-#ifndef POP3_PARSER_H
-#define POP3_PARSER_H
+#ifndef UTILS_H
+#define UTILS_H
 
 #include <stdio.h>
 #include <stdio.h>
@@ -19,10 +19,9 @@
 #include <unistd.h>
 
 #include "logger.h"
-
-// Add any necessary includes or declarations here
+#include "args.h"
 
 // Declaration for the function
-void parseCommand(uint8_t *command, Logger *logger);
+void logConfiguration(struct pop3args args, Logger *mainLogger);
 
-#endif // POP3_PARSER_H
+#endif // UTILS_H

@@ -4,14 +4,23 @@
 #define LOGGER_H
 
 #include <stdarg.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <sys/stat.h>
+#define MAX_LOGGERS 15
 
-typedef enum {
+typedef enum
+{
     INFO,
     ERROR
 } LogLevel;
 
-typedef enum {
-    PARSER,
+typedef enum
+{
+    COMMANDPARSER,
+    ARGPARSER,
     THREAD,
     THREADMAINHANDLER,
     SETUP,
@@ -19,7 +28,8 @@ typedef enum {
     ITERATIVETHREAD
 } LogComponent;
 
-typedef struct {
+typedef struct
+{
     char *logFileName;
 } Logger;
 
@@ -39,4 +49,4 @@ void free_all_loggers();
 // Log function
 void log_message(Logger *logger, LogLevel level, LogComponent component, const char *format, ...);
 
-#endif  // LOGGER_H
+#endif // LOGGER_H
