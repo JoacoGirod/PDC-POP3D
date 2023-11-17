@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
+#include "logger.h"
 
 typedef struct
 {
@@ -86,9 +88,13 @@ void handleCapa(const char *arg)
 
 // Add handlers for other commands
 
-void parse(char *buffer, int size)
+void parseCommand(uint8_t *commandToParse, Logger *logger)
 {
-    char *token = strtok(buffer, "\r\n");
+    log_message(logger, INFO, COMMANDPARSER, "Arrived at Parser!");
+    log_message(logger, INFO, COMMANDPARSER, "Arriving Command '%s'", (char *)commandToParse);
+    log_message(logger, INFO, COMMANDPARSER, "Arriving Command Length %d", strlen((char *)commandToParse));
+
+    char *token = strtok(commandToParse, "\r\n");
     char *command = strtok(token, " ");
     char *arg = strtok(NULL, " ");
 
