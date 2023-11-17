@@ -68,47 +68,59 @@ static void pop3_handle_connection(const struct connection *conn)
     bool error = false;
     size_t availableSpace;
     ssize_t bytesRead;
+    int totalBytesRead;
 
     do
     {
         // Function buffer_write_ptr() returns the pointer to the writable area and the amount of bytes I can write
-        uint8_t *ptr = buffer_write_ptr(pServerBuffer, &availableSpace);
+        uint8_t *basePointer = buffer_write_ptr(pServerBuffer, &availableSpace);
+        uint8_t *ptr = basePointer;
+        totalBytesRead = 0;
 
-        // Receive the information sent by the client and save it in the buffer
-        // TODO add relevant flags to this call
-        bytesRead = recv(conn->fd, ptr, availableSpace, 0);
-
-        // TODO this could fail if the TCP Stream doesnt have the complete command, it should have a cumulative variable and reset it when a command is succesfully parsed
-        if (bytesRead > 0)
+        do
         {
+            // Receive the information sent by the client and save it in the buffer
+            // TODO add relevant flags to this call
+            bytesRead = recv(conn->fd, ptr, availableSpace, 0);
+            totalBytesRead = +bytesRead;
+
             // Check if the received command exceeds the maximum length defined in the RFC Extension
-            if (bytesRead > 255)
+            if (totalBytesRead > 255)
             {
                 // TODO improve error handling here
                 log_message(conn->logger, ERROR, THREADMAINHANDLER, "Received command exceeds the maximum allowed length");
                 error = true; // goto finally?
                 break;
             }
-            // Null-terminate the received data to ensure it's a valid string
-            ptr[bytesRead] = '\0';
 
-            // Advance the write pointer in the buffer by the number of bytes received
-            buffer_write_adv(pServerBuffer, bytesRead);
+            if (bytesRead > 0)
+            {
+                // Null-terminate the received data to ensure it's a valid string
+                ptr[bytesRead] = '\0';
+                // Advance the write pointer in the buffer by the number of bytes received
+                buffer_write_adv(pServerBuffer, bytesRead);
+                ptr = buffer_write_ptr(pServerBuffer, &availableSpace);
+            }
+            else if (bytesRead == 0)
+            {
+                log_message(conn->logger, INFO, THREADMAINHANDLER, "Connection close by the client");
+                break;
+            }
+            else
+            {
+                // Handle the error
+                log_message(conn->logger, ERROR, THREADMAINHANDLER, "Function recv failed");
+                error = true; // goto finally?
+                break;
+            }
+        } while (strstr((char *)basePointer, "\r\n") == NULL); // Checking if the command is unfinished
 
-            parseCommand(ptr, conn->logger);
-        }
-        else if (bytesRead == 0)
+        if (!error)
         {
-            log_message(conn->logger, INFO, THREADMAINHANDLER, "Connection close by the client");
-            break;
+            log_message(conn->logger, INFO, THREADMAINHANDLER, "Command sent to parser (should be complete): '%s'", basePointer);
+            parseCommand(basePointer, conn->logger);
         }
-        else
-        {
-            // Handle the error
-            log_message(conn->logger, ERROR, THREADMAINHANDLER, "recv() failed");
-            error = true; // goto finally?
-            break;
-        }
+
     } while (!error && bytesRead > 0 /*&& !finished*/);
 
     log_message(conn->logger, INFO, THREADMAINHANDLER, "Freeing Resourcers");
