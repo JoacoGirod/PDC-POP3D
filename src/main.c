@@ -16,10 +16,15 @@
 #include "netutils.h"
 #include "tests.h"
 #include "logger.h"
+#include "pop3_parser.h"
+
+void microTesting(){
+    // Used for testing
+}
 
 static bool done = false;
 static void sigterm_handler(const int signal) {
-    printf("\nSignal %d , cleaning up and exiting\n", signal);
+    printf("\nSignal %d , cleaning up and exiting\n", signal); // make the main logger a global variable?
     done = true;
 }
 
@@ -38,17 +43,18 @@ struct connection {
  * Main Handling Function for incoming requests
  */
 static void pop3_handle_connection(const struct connection *conn) {
-    log_message(conn->logger, INFO, THREADMAINHANDLER, "Executing Main Handler");
+    log_message(conn->logger, INFO, THREADMAINHANDLER, "Executing Main Thread Handler");
     // Buffer Initialization
     struct buffer serverBuffer;
     buffer *pServerBuffer = &serverBuffer;
     // TODO verify this size is the correct, big mails case!
-    uint8_t serverDataBuffer[512];
+    uint8_t serverDataBuffer[2048];
     buffer_init(&serverBuffer, N(serverDataBuffer), serverDataBuffer);
 
     // Initial State: Salute
-    memcpy(serverDataBuffer, "+OK POP3 server ready (^-^)\r\n", 30);
-    buffer_write_adv(pServerBuffer, 30);
+    log_message(conn->logger, INFO, THREADMAINHANDLER, "Sending Initial Salute");
+    memcpy(serverDataBuffer, "+OK POP3 server ready (^-^)\r\n\0", 31);
+    buffer_write_adv(pServerBuffer, 31);
     sock_blocking_write(conn->fd, pServerBuffer);
 
     bool error = false;
@@ -65,31 +71,32 @@ static void pop3_handle_connection(const struct connection *conn) {
 
         // TODO this could fail if the TCP Stream doesnt have the complete command, it should have a cumulative variable and reset it when a command is succesfully parsed
         if (bytesRead > 0) {
-            // Check if the received command exceeds the maximum length defined in the RFC Extension
-            if (bytesRead > 255) {
-                // TODO improve error handling here
-                fprintf(stderr, "Received command exceeds the maximum allowed length\n");
-                error = true;
-                break;
-            }
-
-            // Advance the write pointer in the buffer by the number of bytes received
-            buffer_write_adv(pServerBuffer, bytesRead);
-
-            // Process the received data (you may want to implement your command handling logic here)
-            // For now, let's print what we received
-            printf("Received from client: %.*s", (int)bytesRead, ptr);
-        } else if (bytesRead == 0) {
-            // Connection closed by the client
-            break;
-        } else {
-            // Handle the error (you may want to implement proper error handling)
-            perror("recv");
-            error = true;
+        // Check if the received command exceeds the maximum length defined in the RFC Extension
+        if (bytesRead > 255) {
+            // TODO improve error handling here
+            log_message(conn->logger, ERROR, THREADMAINHANDLER, "Received command exceeds the maximum allowed length");
+            error = true; // goto finally?
             break;
         }
+        // Null-terminate the received data to ensure it's a valid string
+        ptr[bytesRead] = '\0';
+
+        // Advance the write pointer in the buffer by the number of bytes received
+        buffer_write_adv(pServerBuffer, bytesRead);
+
+        parseCommand(ptr, conn->logger);
+    } else if (bytesRead == 0) {
+        log_message(conn->logger, INFO, THREADMAINHANDLER, "Connection close by the client");
+        break;
+    } else {
+        // Handle the error
+        log_message(conn->logger, ERROR, THREADMAINHANDLER, "recv() failed");
+        error = true; // goto finally?
+        break;
+    }
     } while (!error && bytesRead > 0);
 
+    log_message(conn->logger, INFO, THREADMAINHANDLER, "Freeing Resourcers");
     close(conn->fd);
 }
 
