@@ -109,63 +109,73 @@ bool hasnt_argument(const char *arg)
     return arg == NULL || strlen(arg) == 0;
 }
 
-int user_action(const char *arg)
+// --------------------------------------------- ACTIONS ---------------------------------------------
+
+int user_action(const struct connection *conn, struct buffer *dataSendingBuffer)
 {
-    printf("user_action\n");
+    send_data("+OK read USER action \r\n", dataSendingBuffer, conn);
     return 0;
 }
-int pass_action(const char *arg)
+int pass_action(const struct connection *conn, struct buffer *dataSendingBuffer)
 {
-    printf("pass_action\n");
+    send_data("+OK read PASS action \r\n", dataSendingBuffer, conn);
     return 0;
 }
-int stat_action(const char *arg)
+int stat_action(const struct connection *conn, struct buffer *dataSendingBuffer)
 {
-    printf("stat_action\n");
+    send_data("+OK read STAT action \r\n", dataSendingBuffer, conn);
     return 0;
 }
-int list_action(const char *arg)
+int list_action(const struct connection *conn, struct buffer *dataSendingBuffer)
 {
-    printf("list_action\n");
+    send_data("+OK read LIST action \r\n", dataSendingBuffer, conn);
     return 0;
 }
-int retr_action(const char *arg)
+int retr_action(const struct connection *conn, struct buffer *dataSendingBuffer)
 {
-    printf("retr_action\n");
+    send_data("+OK read RETR action \r\n", dataSendingBuffer, conn);
+
     return 0;
 }
-int dele_action(const char *arg)
+int dele_action(const struct connection *conn, struct buffer *dataSendingBuffer)
 {
-    printf("dele_action\n");
+    send_data("+OK read DELE action \r\n", dataSendingBuffer, conn);
+
     return 0;
 }
-int noop_action(const char *arg)
+int noop_action(const struct connection *conn, struct buffer *dataSendingBuffer)
 {
-    printf("noop_action\n");
+    send_data("+OK read NOOP action \r\n", dataSendingBuffer, conn);
+
     return 0;
 }
-int rset_action(const char *arg)
+int rset_action(const struct connection *conn, struct buffer *dataSendingBuffer)
 {
-    printf("rset_action\n");
+    send_data("+OK read RSET action \r\n", dataSendingBuffer, conn);
+
     return 0;
 }
-int quit_action(const char *arg)
+int quit_action(const struct connection *conn, struct buffer *dataSendingBuffer)
 {
-    printf("quit_action\n");
+    send_data("+OK read QUIT action \r\n", dataSendingBuffer, conn);
+
     return 0;
 }
-int capa_action(const char *arg)
+int capa_action(const struct connection *conn, struct buffer *dataSendingBuffer)
 {
-    printf("capa_action\n");
+    send_data("+OK read CAPA action \r\n", dataSendingBuffer, conn);
+
     return 0;
 }
-int default_action(const char *arg)
+int default_action(const struct connection *conn, struct buffer *dataSendingBuffer)
 {
-    printf("default_action\n");
+    send_data("-ERR read DEFUALT action \r\n", dataSendingBuffer, conn);
+
     return 0;
 }
 
-typedef int (*command_action)(const char *arg);
+typedef int (*command_action)(const struct connection *conn, struct buffer *dataSendingBuffer);
+// --------------------------------------------- COMMAND HANDLE ---------------------------------------------
 
 struct command
 {
@@ -306,16 +316,15 @@ int parse_input(const uint8_t *input, const struct connection *conn, struct buff
     pop3_command command = get_command(cmd_buffer);
     if (command == ERROR_COMMAND)
     {
-        printf("Invalid command\n");
+        send_data("-ERR Unknown command\r\n", dataSendingBuffer, conn);
     }
     if (!commands[command].accept_arguments(arg_buffer))
     {
-        printf("Bad argument\n");
+        send_data("-ERR Bad argument\r\n", dataSendingBuffer, conn);
     }
     else
     {
-        printf("Command: %s\n", commands[command].name);
-        int commandRet = commands[command].action("TODO ACTION");
+        int commandRet = commands[command].action(conn, dataSendingBuffer);
         if (commandRet == -1)
         {
             printf("Error executing command\n");

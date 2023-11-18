@@ -1,15 +1,16 @@
 {
-    "files.associations": {
-        "socket.h": "c",
-        "buffer.h": "c",
-        "netutils.h": "c",
-        "stdbool.h": "c",
-        "tests.h": "c",
-        "parser.h": "c",
-        "pop3_parser.h": "c",
-        "args.h": "c",
-        "utils.h": "c",
-        "logger.h": "c",
-        "stdio.h": "c"
-    }
+  "files.associations": {
+    "socket.h": "c",
+    "buffer.h": "c",
+    "netutils.h": "c",
+    "stdbool.h": "c",
+    "tests.h": "c",
+    "parser.h": "c",
+    "pop3_parser.h": "c",
+    "args.h": "c",
+    "utils.h": "c",
+    "logger.h": "c",
+    "stdio.h": "c",
+    "PARAFELIX.C": "cpp"
+  }
 }
