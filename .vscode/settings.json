@@ -1,5 +1,12 @@
 {
     "files.associations": {
-        "socket.h": "c"
+        "socket.h": "c",
+        "PARAFELIX.C": "cpp",
+        "pop3_parser_automaton.h": "c",
+        "parser_automaton.h": "c",
+        "parseradt.h": "c",
+        "stdio.h": "c",
+        "logger.h": "c",
+        "args.h": "c"
     }
 }

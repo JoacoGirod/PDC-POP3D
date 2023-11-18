@@ -19,7 +19,8 @@
 #include "netutils.h"
 #include "tests.h"
 #include "logger.h"
-#include "pop3_parser.h"
+#include "parserADT.h"
+#include "pop3_parser_automaton.h"
 #include "args.h"
 #include "utils.h"
 
@@ -95,7 +96,7 @@ static void pop3_handle_connection(const struct connection *conn)
             // Advance the write pointer in the buffer by the number of bytes received
             buffer_write_adv(pServerBuffer, bytesRead);
 
-            parseCommand(ptr, conn->logger);
+            parse_input(ptr, conn->logger);
         }
         else if (bytesRead == 0)
         {
