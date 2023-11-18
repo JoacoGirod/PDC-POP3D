@@ -8,7 +8,7 @@ void sigterm_handler(const int signal)
 }
 
 // Main Thread Handling Function
-void pop3_handle_connection(const struct connection *conn)
+void pop3_handle_connection(struct connection *conn)
 {
     log_message(conn->logger, INFO, THREADMAINHANDLER, "Executing Main Thread Handler");
 
@@ -92,7 +92,7 @@ void pop3_handle_connection(const struct connection *conn)
 }
 
 // Function to send data
-void send_data(const char *data, buffer *pBuffer, const struct connection *conn)
+void send_data(const char *data, buffer *pBuffer, struct connection *conn)
 {
     size_t dataLength = strlen(data);
 

@@ -5,6 +5,12 @@
 #include <ctype.h>
 #include <stdio.h>
 #include "parserADT.h"
+
+#define CAPA_MESSAGE "+OK\r\nCAPA\r\nUSER\r\PIPELINING\r\n.\r\n"
+#define BASE_DIR "mails"
+#define MAX_FILE_PATH MAX_FILENAME_LENGTH + 10
+#define MAX_COMMAND_LENGTH 255
+
 typedef struct parserCDT *parserADT;
 
 parserADT parser_init(const parser_automaton *def)
@@ -109,72 +115,179 @@ bool hasnt_argument(const char *arg)
     return arg == NULL || strlen(arg) == 0;
 }
 
+//aux function for STAT command action
+size_t calculate_total_email_bytes(struct connection *conn) {
+    size_t totalBytes = 0;
+    
+    for (size_t i = 0; i < conn->numEmails; ++i) {
+        totalBytes += conn->mails[i].octets;
+    }
+    
+    return totalBytes;
+}
+
+
 // --------------------------------------------- ACTIONS ---------------------------------------------
 
-int user_action(const struct connection *conn, struct buffer *dataSendingBuffer)
+int user_action(struct connection *conn, struct buffer *dataSendingBuffer)
 {
     send_data("+OK read USER action \r\n", dataSendingBuffer, conn);
     return 0;
 }
-int pass_action(const struct connection *conn, struct buffer *dataSendingBuffer)
+int pass_action(struct connection *conn, struct buffer *dataSendingBuffer)
 {
     send_data("+OK read PASS action \r\n", dataSendingBuffer, conn);
     return 0;
 }
-int stat_action(const struct connection *conn, struct buffer *dataSendingBuffer)
-{
-    send_data("+OK read STAT action \r\n", dataSendingBuffer, conn);
-    return 0;
-}
-int list_action(const struct connection *conn, struct buffer *dataSendingBuffer)
-{
-    send_data("+OK read LIST action \r\n", dataSendingBuffer, conn);
-    return 0;
-}
-int retr_action(const struct connection *conn, struct buffer *dataSendingBuffer)
-{
-    send_data("+OK read RETR action \r\n", dataSendingBuffer, conn);
 
-    return 0;
-}
-int dele_action(const struct connection *conn, struct buffer *dataSendingBuffer)
+int stat_action(struct connection *conn, struct buffer *dataSendingBuffer)
 {
-    send_data("+OK read DELE action \r\n", dataSendingBuffer, conn);
+    //calculates number of emails and total email bytes
+    size_t numEmails = conn->numEmails;
+    size_t totalEmailBytes = calculate_total_email_bytes(conn);
 
-    return 0;
-}
-int noop_action(const struct connection *conn, struct buffer *dataSendingBuffer)
-{
-    send_data("+OK read NOOP action \r\n", dataSendingBuffer, conn);
+    //create response string
+    char response[256];
+    snprintf(response, sizeof(response), "+OK %zu %zu\r\n", numEmails, totalEmailBytes);
 
-    return 0;
-}
-int rset_action(const struct connection *conn, struct buffer *dataSendingBuffer)
-{
-    send_data("+OK read RSET action \r\n", dataSendingBuffer, conn);
-
-    return 0;
-}
-int quit_action(const struct connection *conn, struct buffer *dataSendingBuffer)
-{
-    send_data("+OK read QUIT action \r\n", dataSendingBuffer, conn);
-
-    return 0;
-}
-int capa_action(const struct connection *conn, struct buffer *dataSendingBuffer)
-{
-    send_data("+OK read CAPA action \r\n", dataSendingBuffer, conn);
-
-    return 0;
-}
-int default_action(const struct connection *conn, struct buffer *dataSendingBuffer)
-{
-    send_data("-ERR read DEFUALT action \r\n", dataSendingBuffer, conn);
+    //print the response string
+    send_data(response, dataSendingBuffer, conn);
 
     return 0;
 }
 
-typedef int (*command_action)(const struct connection *conn, struct buffer *dataSendingBuffer);
+int list_action(struct connection *conn, struct buffer *dataSendingBuffer)
+{
+    size_t numEmails = conn->numEmails;
+
+    //creates the response header
+    char responseHeader[64];
+    snprintf(responseHeader, sizeof(responseHeader), "+OK %zu messages:\r\n", numEmails);
+
+    //sends response header
+    send_data(responseHeader, dataSendingBuffer, conn);
+
+    //loops through each email and sends its index and size
+    for (size_t i = 0; i < numEmails; ++i) {
+        char emailInfo[64];
+        snprintf(emailInfo, sizeof(emailInfo), "%zu %zu\r\n", i + 1, conn->mails[i].octets);
+        send_data(emailInfo, dataSendingBuffer, conn);
+    }
+
+    //sends termination line
+    send_data(".\r\n", dataSendingBuffer, conn);
+
+    return 0;
+}
+
+int retr_action(struct connection *conn, struct buffer *dataSendingBuffer, size_t mailIndex)
+{
+    //checks if the emailIndex is valid
+    if (mailIndex >= conn->numEmails || mailIndex <= 0) {
+        //invalid email index
+        send_data("-ERR Invalid email index\r\n", dataSendingBuffer, conn);
+        return 1;
+    }
+
+    struct Mail *mail = &conn->mails[mailIndex];
+
+    //constructs file path
+    char filePath[MAX_FILE_PATH];
+    snprintf(filePath, sizeof(filePath), "%s/%s/%s", BASE_DIR, mail->folder, mail->filename);
+
+    // Open the file for reading
+    FILE *file = fopen(filePath, "r");
+    if (file == NULL) {
+        perror("Error opening mail file");
+        return -1;  // Or handle the error appropriately
+    }
+
+    //sends initial response
+    char initial[64]; 
+    sprintf(initial, "+OK %zu octets\r\n", mail->octets);
+    send_data(initial, dataSendingBuffer, conn);
+
+    //reads and sends file contents
+    char buffer[1024]; 
+    size_t bytesRead;
+
+    while ((bytesRead = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+        fwrite(buffer, 1, bytesRead, dataSendingBuffer->write);
+    }
+
+    //closes file
+    fclose(file);
+
+    //marks mail as RETRIEVED
+    mail->status = RETRIEVED;
+
+    send_data(".\r\n", dataSendingBuffer, conn);
+
+    return 0;
+}
+
+//sets specific Mail to state DELETED
+int dele_action(struct connection *conn, struct buffer *dataSendingBuffer, size_t mailIndex)
+{
+    //checks if the emailIndex is valid
+    if (mailIndex >= conn->numEmails || mailIndex <= 0) {
+        //invalid email index
+        send_data("-ERR Invalid email index\r\n", dataSendingBuffer, conn);
+        return 1;
+    }
+
+    //sets the mail status to DELETED
+    conn->mails[mailIndex].status = DELETED;
+
+    send_data("+OK Marked to be deleted. \r\n", dataSendingBuffer, conn);
+
+    return 0;
+}
+
+int noop_action(struct connection *conn, struct buffer *dataSendingBuffer)
+{
+    //simply responds +OK
+    send_data("+OK\r\n", dataSendingBuffer, conn);
+
+    return 0;
+}
+
+int rset_action(struct connection *conn, struct buffer *dataSendingBuffer)
+{
+    //loops through each email and sets its status to UNCHANGED
+    for (size_t i = 0; i < conn->numEmails; ++i) {
+        conn->mails[i].status = UNCHANGED;
+    }
+    send_data("+OK \r\n", dataSendingBuffer, conn);
+
+    return 0;
+}
+
+int quit_action(struct connection *conn, struct buffer *dataSendingBuffer)
+{
+    send_data("+OK Logging out. \r\n", dataSendingBuffer, conn);
+    close(conn->fd);
+
+    return 1;
+}
+
+int capa_action(struct connection *conn, struct buffer *dataSendingBuffer)
+{
+    send_data(CAPA_MESSAGE, dataSendingBuffer, conn);
+
+    return 0;
+}
+
+int default_action(struct connection *conn, struct buffer *dataSendingBuffer)
+{
+    // char initial[MAX_COMMAND_LENGTH]; 
+    // sprintf(initial, "-ERR Unknown command %s\r\n", command); 
+    send_data("-ERR Unknown command \r\n", dataSendingBuffer, conn);
+
+    return 0;
+}
+
+typedef int (*command_action)(struct connection *conn, struct buffer *dataSendingBuffer);
 // --------------------------------------------- COMMAND HANDLE ---------------------------------------------
 
 struct command
@@ -270,7 +383,7 @@ size_t u_strlen(const uint8_t *s)
     return i;
 }
 
-int parse_input(const uint8_t *input, const struct connection *conn, struct buffer *dataSendingBuffer)
+int parse_input(const uint8_t *input, struct connection *conn, struct buffer *dataSendingBuffer)
 {
     // struct GlobalConfiguration *gConf = get_global_configuration();
     // Users array

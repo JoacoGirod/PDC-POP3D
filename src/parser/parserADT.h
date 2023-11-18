@@ -30,6 +30,6 @@ void *parser_get_data(parserADT p);
 // Forward declaration for struct connection
 struct connection;
 
-int parse_input(const uint8_t *input, const struct connection *conn, struct buffer *dataSendingBuffer);
+int parse_input(const uint8_t *input, struct connection *conn, struct buffer *dataSendingBuffer);
 
 #endif

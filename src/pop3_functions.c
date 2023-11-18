@@ -37,7 +37,7 @@ void retrieve_emails_from_directory(const char *user_path, const char *dir_name,
                 mail.octets = get_file_size(dir_path, entry->d_name);
                 snprintf(mail.filename, MAX_FILENAME_LENGTH, "%s", entry->d_name);
                 snprintf(mail.folder, 4, "%s", dir_name);
-                mail.status = STATUS_NORMAL;
+                mail.status = UNCHANGED;
 
                 // Add the mail to the user's mailbox
                 conn->mails[conn->numEmails++] = mail;

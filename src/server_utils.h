@@ -31,9 +31,9 @@
 
 enum MailStatus
 {
-    STATUS_NORMAL,
-    STATUS_DELETED,
-    STATUS_RETRIEVED
+    UNCHANGED,
+    DELETED,
+    RETRIEVED
 };
 
 struct Mail
@@ -58,12 +58,12 @@ struct connection
     size_t numEmails;
 };
 
-void send_data(const char *data, buffer *pBuffer, const struct connection *conn);
+void send_data(const char *data, buffer *pBuffer, struct connection *conn);
 int serve_pop3_concurrent_blocking(const int server);
 void *handle_configuration_requests(void *arg);
 void handle_client_without_threading(int client, const struct sockaddr_in6 *caddr);
 void *handle_connection_pthread(void *args);
-void pop3_handle_connection(const struct connection *conn);
+void pop3_handle_connection(struct connection *conn);
 void sigterm_handler(const int signal);
 
 #endif // SERVER_UTILS_H
