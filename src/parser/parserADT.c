@@ -260,9 +260,19 @@ size_t u_strlen(const uint8_t *s)
     return i;
 }
 
-int parse_input(const uint8_t *input, Logger *logger)
+int parse_input(const uint8_t *input, const struct connection *conn, struct buffer *dataSendingBuffer)
 {
-    log_message(logger, INFO, COMMANDPARSER, "Parsing input: %s", input);
+    // struct GlobalConfiguration *gConf = get_global_configuration();
+    // Users array
+    // gConf->users
+    // Quantity of Users for cycling
+    // gConf->numUsers
+
+    // Logger conn->logger
+
+    // send_data("Esto le reponde al usuario", dataSendingBuffer, conn);
+
+    log_message(conn->logger, INFO, COMMANDPARSER, "Parsing input: %s", input);
     extern const parser_automaton pop3_parser_automaton;
 
     parserADT pop3_parser = parser_init(&pop3_parser_automaton);

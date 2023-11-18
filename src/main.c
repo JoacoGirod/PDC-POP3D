@@ -25,16 +25,18 @@
 #include "pop3_parser_automaton.h"
 #include "args.h"
 #include "server_utils.h"
+#include "global_config.h"
 
 // Creates Servers
 int main(const int argc, char **argv)
 {
     Logger *mainLogger = initialize_logger("mainLogs.log");
 
-    struct pop3args args;
-    parse_args(argc, argv, &args, mainLogger);
+    parse_args(argc, argv, mainLogger); // Function automatically sets the Global Configuration
 
-    logConfiguration(args, mainLogger);
+    logGlobalConfiguration(mainLogger);
+
+    struct GlobalConfiguration *gConf = get_global_configuration();
 
     const char *err_msg;
 
@@ -49,13 +51,13 @@ int main(const int argc, char **argv)
     pop3_addr.sin_family = AF_INET;
 
     // TODO maybe this can be transfered into the parse arguments and be directly saved in the correct type
-    if (inet_pton(AF_INET, args.pop3_addr, &(pop3_addr.sin_addr)) <= 0)
+    if (inet_pton(AF_INET, gConf->pop3_addr, &(pop3_addr.sin_addr)) <= 0)
     {
-        log_message(mainLogger, ERROR, SETUPPOP3, "Invalid server address format: %s", args.pop3_addr);
+        log_message(mainLogger, ERROR, SETUPPOP3, "Invalid server address format: %s", gConf->pop3_addr);
         return 1;
     }
 
-    pop3_addr.sin_port = htons(args.pop3_port);
+    pop3_addr.sin_port = htons(gConf->pop3_port);
 
     // Creating POP3 TCP Socket
     log_message(mainLogger, INFO, SETUPPOP3, "Creating TCP Socket");
@@ -86,7 +88,7 @@ int main(const int argc, char **argv)
         goto finally;
     }
 
-    log_message(mainLogger, INFO, SETUPPOP3, "POP3 Server listening on TCP port %d", args.pop3_port);
+    log_message(mainLogger, INFO, SETUPPOP3, "POP3 Server listening on TCP port %d", gConf->pop3_port);
 
     // ---------------------------------------------------------------------------
     // --------------------------- CONFIGURATION SERVER --------------------------
@@ -99,13 +101,13 @@ int main(const int argc, char **argv)
     conf_addr.sin_family = AF_INET;
 
     // TODO maybe this can be transfered into the parse arguments and be directly saved in the correct type
-    if (inet_pton(AF_INET, args.conf_addr, &(conf_addr.sin_addr)) <= 0)
+    if (inet_pton(AF_INET, gConf->conf_addr, &(conf_addr.sin_addr)) <= 0)
     {
-        log_message(mainLogger, ERROR, SETUPCONF, "Invalid configuration server address format: %s", args.conf_addr);
+        log_message(mainLogger, ERROR, SETUPCONF, "Invalid configuration server address format: %s", gConf->conf_addr);
         return 1;
     }
 
-    conf_addr.sin_port = htons(args.conf_port);
+    conf_addr.sin_port = htons(gConf->conf_port);
 
     // Creating Configuration UDP Socket
     log_message(mainLogger, INFO, SETUPCONF, "Creating UDP Socket");
@@ -124,7 +126,7 @@ int main(const int argc, char **argv)
         goto finally;
     }
 
-    log_message(mainLogger, INFO, SETUPCONF, "Configuration Server listening on UDP port %d", args.conf_port);
+    log_message(mainLogger, INFO, SETUPCONF, "Configuration Server listening on UDP port %d", gConf->conf_port);
 
     // Configuring Signal Handlers
     log_message(mainLogger, INFO, SETUP, "Configuring Signal Handlers");

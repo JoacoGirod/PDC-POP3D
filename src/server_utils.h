@@ -58,7 +58,6 @@ struct connection
     size_t numEmails;
 };
 
-void logConfiguration(struct pop3args args, Logger *mainLogger);
 void send_data(const char *data, buffer *pBuffer, const struct connection *conn);
 int serve_pop3_concurrent_blocking(const int server);
 void *handle_configuration_requests(void *arg);

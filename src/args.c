@@ -65,19 +65,17 @@ usage(const char *progname)
     exit(1);
 }
 
-void parse_args(const int argc, char **argv, struct pop3args *args, Logger *logger)
+void parse_args(const int argc, char **argv, Logger *logger)
 {
     log_message(logger, INFO, ARGPARSER, "Parsing arguments");
 
-    memset(args, 0, sizeof(*args)); // sobre todo para setear en null los punteros de users
+    struct GlobalConfiguration *gConf = get_global_configuration();
 
-    args->pop3_addr = "0.0.0.0";
-    args->pop3_port = 1110;
+    gConf->pop3_addr = "0.0.0.0";
+    gConf->pop3_port = 1110;
 
-    args->conf_addr = "127.0.0.1";
-    args->conf_port = 8080;
-
-    args->disectors_enabled = true;
+    gConf->conf_addr = "127.0.0.1";
+    gConf->conf_port = 8080;
 
     int c;
     int nusers = 0;
@@ -98,30 +96,28 @@ void parse_args(const int argc, char **argv, struct pop3args *args, Logger *logg
             usage(argv[0]);
             break;
         case 'l':
-            args->pop3_addr = optarg;
+            gConf->pop3_addr = optarg;
             break;
         case 'L':
-            args->conf_addr = optarg;
-            break;
-        case 'N':
-            args->disectors_enabled = false;
+            gConf->conf_addr = optarg;
             break;
         case 'p':
-            args->pop3_port = port(optarg);
+            gConf->pop3_port = port(optarg);
             break;
         case 'P':
-            args->conf_port = port(optarg);
+            gConf->conf_port = port(optarg);
             break;
         case 'u':
-            if (nusers >= MAX_USERS)
+            if (nusers < MAX_USERS)
             {
-                fprintf(stderr, "maximun number of command line users reached: %d.\n", MAX_USERS);
-                exit(1);
+                user(optarg, gConf->users + nusers);
+                gConf->numUsers++;
+                nusers++;
             }
             else
             {
-                user(optarg, args->users + nusers);
-                nusers++;
+                fprintf(stderr, "maximum number of command line users reached: %d.\n", MAX_USERS);
+                exit(1);
             }
             break;
         case 'v':

@@ -7,56 +7,6 @@ void sigterm_handler(const int signal)
     done = true;
 }
 
-void logConfiguration(struct pop3args args, Logger *mainLogger)
-{
-    log_message(mainLogger, INFO, SETUP, "<<INITIAL SERVER CONFIGURATION>>");
-    log_message(mainLogger, INFO, SETUP, "POP3 Address (TCP) : %s", args.pop3_addr);
-    log_message(mainLogger, INFO, SETUP, "POP3 Port (TCP) : %d", args.pop3_port);
-    log_message(mainLogger, INFO, SETUP, "Configuration Service Address (UDP) : %s", args.conf_addr);
-    log_message(mainLogger, INFO, SETUP, "Configuration Service Port (UDP) : %d", args.conf_port);
-    log_message(mainLogger, INFO, SETUP, "Users Registered :");
-    for (int i = 0; i < 10; i++)
-        log_message(mainLogger, INFO, SETUP, "%s", args.users[i].name);
-}
-
-// Function to send data
-void send_data(const char *data, buffer *pBuffer, const struct connection *conn)
-{
-    size_t dataLength = strlen(data);
-
-    if (dataLength > 255)
-    {
-        log_message(conn->logger, ERROR, THREADMAINHANDLER, "Data to be sent exceeds the maximum allowed length");
-        // Handle the error, return, or exit as needed
-        return;
-    }
-
-    size_t availableSpace;
-    uint8_t *basePointer = buffer_write_ptr(pBuffer, &availableSpace);
-
-    if (dataLength > availableSpace)
-    {
-        log_message(conn->logger, ERROR, THREADMAINHANDLER, "Insufficient space in the buffer to write data");
-        // Handle the error, return, or exit as needed
-        return;
-    }
-
-    // Copy the data to the buffer
-    memcpy(basePointer, data, dataLength);
-
-    // Null-terminate the data to ensure it's a valid string
-    basePointer[dataLength] = '\0';
-
-    // Advance the write pointer in the buffer by the number of bytes written
-    buffer_write_adv(pBuffer, dataLength);
-
-    // Send the data to the client
-    sock_blocking_write(conn->fd, pBuffer);
-
-    // Reset buffer pointers for reuse
-    buffer_reset(pBuffer);
-}
-
 // Main Thread Handling Function
 void pop3_handle_connection(const struct connection *conn)
 {
@@ -129,7 +79,8 @@ void pop3_handle_connection(const struct connection *conn)
         if (!error)
         {
             log_message(conn->logger, INFO, THREADMAINHANDLER, "Command sent to parser (should be complete): '%s'", basePointer);
-            parse_input(basePointer, conn->logger);
+            // parse_input(basePointer, conn->logger);
+            parse_input(basePointer, conn, pServerBuffer);
         }
 
         buffer_reset(pClientBuffer);
@@ -138,6 +89,44 @@ void pop3_handle_connection(const struct connection *conn)
 
     log_message(conn->logger, INFO, THREADMAINHANDLER, "Freeing Resources");
     close(conn->fd);
+}
+
+// Function to send data
+void send_data(const char *data, buffer *pBuffer, const struct connection *conn)
+{
+    size_t dataLength = strlen(data);
+
+    if (dataLength > 255)
+    {
+        log_message(conn->logger, ERROR, THREADMAINHANDLER, "Data to be sent exceeds the maximum allowed length");
+        // Handle the error, return, or exit as needed
+        return;
+    }
+
+    size_t availableSpace;
+    uint8_t *basePointer = buffer_write_ptr(pBuffer, &availableSpace);
+
+    if (dataLength > availableSpace)
+    {
+        log_message(conn->logger, ERROR, THREADMAINHANDLER, "Insufficient space in the buffer to write data");
+        // Handle the error, return, or exit as needed
+        return;
+    }
+
+    // Copy the data to the buffer
+    memcpy(basePointer, data, dataLength);
+
+    // Null-terminate the data to ensure it's a valid string
+    basePointer[dataLength] = '\0';
+
+    // Advance the write pointer in the buffer by the number of bytes written
+    buffer_write_adv(pBuffer, dataLength);
+
+    // Send the data to the client
+    sock_blocking_write(conn->fd, pBuffer);
+
+    // Reset buffer pointers for reuse
+    buffer_reset(pBuffer);
 }
 
 // Modify the function call to pass the connection struct
