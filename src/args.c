@@ -74,8 +74,8 @@ void parse_args(const int argc, char **argv, struct pop3args *args, Logger *logg
     args->pop3_addr = "0.0.0.0";
     args->pop3_port = 1110;
 
-    args->mng_addr = "127.0.0.1";
-    args->mng_port = 8080;
+    args->conf_addr = "127.0.0.1";
+    args->conf_port = 8080;
 
     args->disectors_enabled = true;
 
@@ -101,7 +101,7 @@ void parse_args(const int argc, char **argv, struct pop3args *args, Logger *logg
             args->pop3_addr = optarg;
             break;
         case 'L':
-            args->mng_addr = optarg;
+            args->conf_addr = optarg;
             break;
         case 'N':
             args->disectors_enabled = false;
@@ -110,7 +110,7 @@ void parse_args(const int argc, char **argv, struct pop3args *args, Logger *logg
             args->pop3_port = port(optarg);
             break;
         case 'P':
-            args->mng_port = port(optarg);
+            args->conf_port = port(optarg);
             break;
         case 'u':
             if (nusers >= MAX_USERS)

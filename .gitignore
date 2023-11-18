@@ -33,3 +33,6 @@ Thumbs.db
 
 # Ignore backups
 *~
+
+# Main Executable
+pop3d

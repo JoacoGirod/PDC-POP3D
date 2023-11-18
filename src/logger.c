@@ -73,7 +73,7 @@ Logger *initialize_logger(const char *logFileName)
     }
 
     // Add an initial line to the log file
-    fprintf(logFile, "LOGS FOR POP3\n");
+    fprintf(logFile, "LOGS\n");
 
     fclose(logFile);
 
@@ -146,11 +146,20 @@ void log_message(Logger *logger, LogLevel level, LogComponent component, const c
     case THREAD:
         fprintf(logFile, "THREAD");
         break;
+    case CONFIGTHREAD:
+        fprintf(logFile, "CONFIGURATION THREAD");
+        break;
     case THREADMAINHANDLER:
         fprintf(logFile, "MAIN THREAD HANDLER");
         break;
     case SETUP:
         fprintf(logFile, "SETUP");
+        break;
+    case SETUPPOP3:
+        fprintf(logFile, "SETUP POP3");
+        break;
+    case SETUPCONF:
+        fprintf(logFile, "SETUP CONF");
         break;
     case DISTRIBUTORTHREAD:
         fprintf(logFile, "DISTRIBUTOR THREAD");

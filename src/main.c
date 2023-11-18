@@ -69,48 +69,60 @@ static void pop3_handle_connection(const struct connection *conn)
     bool error = false;
     size_t availableSpace;
     ssize_t bytesRead;
+    int totalBytesRead;
 
     do
     {
         // Function buffer_write_ptr() returns the pointer to the writable area and the amount of bytes I can write
-        uint8_t *ptr = buffer_write_ptr(pServerBuffer, &availableSpace);
+        uint8_t *basePointer = buffer_write_ptr(pServerBuffer, &availableSpace);
+        uint8_t *ptr = basePointer;
+        totalBytesRead = 0;
 
-        // Receive the information sent by the client and save it in the buffer
-        // TODO add relevant flags to this call
-        bytesRead = recv(conn->fd, ptr, availableSpace, 0);
-
-        // TODO this could fail if the TCP Stream doesnt have the complete command, it should have a cumulative variable and reset it when a command is succesfully parsed
-        if (bytesRead > 0)
+        do
         {
+            // Receive the information sent by the client and save it in the buffer
+            // TODO add relevant flags to this call
+            bytesRead = recv(conn->fd, ptr, availableSpace, 0);
+            totalBytesRead = +bytesRead;
+
             // Check if the received command exceeds the maximum length defined in the RFC Extension
-            if (bytesRead > 255)
+            if (totalBytesRead > 255)
             {
                 // TODO improve error handling here
                 log_message(conn->logger, ERROR, THREADMAINHANDLER, "Received command exceeds the maximum allowed length");
                 error = true; // goto finally?
                 break;
             }
-            // Null-terminate the received data to ensure it's a valid string
-            ptr[bytesRead] = '\0';
 
-            // Advance the write pointer in the buffer by the number of bytes received
-            buffer_write_adv(pServerBuffer, bytesRead);
+            if (bytesRead > 0)
+            {
+                // Null-terminate the received data to ensure it's a valid string
+                ptr[bytesRead] = '\0';
+                // Advance the write pointer in the buffer by the number of bytes received
+                buffer_write_adv(pServerBuffer, bytesRead);
+                ptr = buffer_write_ptr(pServerBuffer, &availableSpace);
+            }
+            else if (bytesRead == 0)
+            {
+                log_message(conn->logger, INFO, THREADMAINHANDLER, "Connection close by the client");
+                break;
+            }
+            else
+            {
+                // Handle the error
+                log_message(conn->logger, ERROR, THREADMAINHANDLER, "Function recv failed");
+                error = true; // goto finally?
+                break;
+            }
+        } while (strstr((char *)basePointer, "\r\n") == NULL); // Checking if the command is unfinished
 
-            parse_input(ptr, conn->logger);
-        }
-        else if (bytesRead == 0)
+        if (!error)
         {
-            log_message(conn->logger, INFO, THREADMAINHANDLER, "Connection close by the client");
-            break;
+            log_message(conn->logger, INFO, THREADMAINHANDLER, "Command sent to parser (should be complete): '%s'", basePointer);
+            parse_input(basePointer, conn->logger);
         }
-        else
-        {
-            // Handle the error
-            log_message(conn->logger, ERROR, THREADMAINHANDLER, "recv() failed");
-            error = true; // goto finally?
-            break;
-        }
-    } while (!error && bytesRead > 0);
+
+    } while (!error && bytesRead > 0 /*&& !finished*/);
 
     log_message(conn->logger, INFO, THREADMAINHANDLER, "Freeing Resourcers");
     close(conn->fd);
@@ -166,6 +178,47 @@ static void handle_client_without_threading(int client, const struct sockaddr_in
 
     // Close the client socket
     close(client);
+}
+
+// Function to handle UDP requests
+#include <unistd.h>
+
+void *handle_configuration_requests(void *arg)
+{
+    Logger *configurationLogger = initialize_logger("configurationServer.log");
+    log_message(configurationLogger, INFO, CONFIGTHREAD, "Configuration Server is Running...");
+
+    int udp_server = *((int *)arg);
+
+    struct sockaddr_in client_addr;
+    socklen_t client_addr_len = sizeof(client_addr);
+
+    char buffer[1024];
+    int received_bytes;
+
+    while (1)
+    {
+        // Receive data from the client
+        received_bytes = recvfrom(udp_server, buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &client_addr_len);
+        if (received_bytes == -1)
+        {
+            log_message(configurationLogger, ERROR, CONFIGTHREAD, "Error receiving data from client");
+            break;
+        }
+
+        // Print received data
+        buffer[received_bytes] = '\0';
+        log_message(configurationLogger, INFO, CONFIGTHREAD, "Received message from client: %s", buffer);
+
+        // Echo the data back to the client
+        if (sendto(udp_server, buffer, received_bytes, 0, (struct sockaddr *)&client_addr, client_addr_len) == -1)
+        {
+            log_message(configurationLogger, ERROR, CONFIGTHREAD, "Error sending data to client");
+            break;
+        }
+    }
+
+    return NULL;
 }
 
 /**
@@ -224,59 +277,111 @@ int main(const int argc, char **argv)
 
     logConfiguration(args, mainLogger);
 
-    unsigned port = args.pop3_port; // Standard Port defined in class
+    const char *err_msg;
 
-    log_message(mainLogger, INFO, SETUP, "Configuring Server Address");
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
+    // ---------------------------------------------------------------------------
+    // --------------------------- MAIN POP3 SERVER ------------------------------
+    // ---------------------------------------------------------------------------
 
-    // Use the user-provided address or default to INADDR_ANY
-    if (inet_pton(AF_INET, args.pop3_addr, &(addr.sin_addr)) <= 0)
+    // Configuring POP3 Server Address
+    log_message(mainLogger, INFO, SETUPPOP3, "Configuring Server Address");
+    struct sockaddr_in pop3_addr;
+    memset(&pop3_addr, 0, sizeof(pop3_addr));
+    pop3_addr.sin_family = AF_INET;
+
+    // TODO maybe this can be transfered into the parse arguments and be directly saved in the correct type
+    if (inet_pton(AF_INET, args.pop3_addr, &(pop3_addr.sin_addr)) <= 0)
     {
-        log_message(mainLogger, ERROR, SETUP, "Invalid address format: %s", args.pop3_addr);
+        log_message(mainLogger, ERROR, SETUPPOP3, "Invalid server address format: %s", args.pop3_addr);
         return 1;
     }
 
-    addr.sin_port = htons(port);
+    pop3_addr.sin_port = htons(args.pop3_port);
 
-    const char *err_msg;
-
-    log_message(mainLogger, INFO, SETUP, "Creating TCP Socket");
-    const int server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if (server < 0)
+    // Creating POP3 TCP Socket
+    log_message(mainLogger, INFO, SETUPPOP3, "Creating TCP Socket");
+    const int pop3_server = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (pop3_server < 0)
     {
-        err_msg = "Unable to create socket";
+        err_msg = "[POP3] Unable to create server socket";
         goto finally;
     }
 
-    // Server is configured to not wait for the last bytes transfered after the FIN in the TCP Connection
+    // POP3 Server is configured to not wait for the last bytes transferred after the FIN in the TCP Connection
     // This allows for quick restart of the server, should only be used in development
-    setsockopt(server, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
+    setsockopt(pop3_server, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
 
-    log_message(mainLogger, INFO, SETUP, "Binding the Socket to the specified port and address");
-    if (bind(server, (struct sockaddr *)&addr, sizeof(addr)) < 0)
+    // Binding POP3 Server Socket
+    log_message(mainLogger, INFO, SETUPPOP3, "Binding Server Socket to the specified address and port");
+    if (bind(pop3_server, (struct sockaddr *)&pop3_addr, sizeof(pop3_addr)) < 0)
     {
-        err_msg = "Unable to bind socket";
+        err_msg = "[POP3] Unable to bind POP3 server socket";
         goto finally;
     }
 
-    log_message(mainLogger, INFO, SETUP, "Configuring Listening Queue");
-    // TODO : change this number from 20 to 500 to allow for more concurrent connections, test what happens with 3
-    if (listen(server, 20) < 0)
+    // Listening on POP3 Server Socket
+    log_message(mainLogger, INFO, SETUPPOP3, "Configuring Listening Queue for Server");
+    if (listen(pop3_server, 20) < 0)
     {
-        err_msg = "Unable to listen";
+        err_msg = "Unable to listen on POP3 server socket";
         goto finally;
     }
 
+    log_message(mainLogger, INFO, SETUPPOP3, "POP3 Server listening on TCP port %d", args.pop3_port);
+
+    // ---------------------------------------------------------------------------
+    // --------------------------- CONFIGURATION SERVER --------------------------
+    // ---------------------------------------------------------------------------
+
+    // Configuring Configuration Server Address
+    log_message(mainLogger, INFO, SETUPCONF, "Configuring Server Address");
+    struct sockaddr_in conf_addr;
+    memset(&conf_addr, 0, sizeof(conf_addr));
+    conf_addr.sin_family = AF_INET;
+
+    // TODO maybe this can be transfered into the parse arguments and be directly saved in the correct type
+    if (inet_pton(AF_INET, args.conf_addr, &(conf_addr.sin_addr)) <= 0)
+    {
+        log_message(mainLogger, ERROR, SETUPCONF, "Invalid configuration server address format: %s", args.conf_addr);
+        return 1;
+    }
+
+    conf_addr.sin_port = htons(args.conf_port);
+
+    // Creating Configuration UDP Socket
+    log_message(mainLogger, INFO, SETUPCONF, "Creating UDP Socket");
+    const int conf_server = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+    if (conf_server < 0)
+    {
+        err_msg = "Unable to create configuration server socket";
+        goto finally;
+    }
+
+    // Binding Configuration Server Socket
+    log_message(mainLogger, INFO, SETUPCONF, "Binding Socket to the specified address and port");
+    if (bind(conf_server, (struct sockaddr *)&conf_addr, sizeof(conf_addr)) < 0)
+    {
+        err_msg = "Unable to bind configuration server socket";
+        goto finally;
+    }
+
+    log_message(mainLogger, INFO, SETUPCONF, "Configuration Server listening on UDP port %d", args.conf_port);
+
+    // Configuring Signal Handlers
     log_message(mainLogger, INFO, SETUP, "Configuring Signal Handlers");
     signal(SIGTERM, sigterm_handler); // Registering SIGTERM helps tools like Valgrind
     signal(SIGINT, sigterm_handler);
 
-    log_message(mainLogger, INFO, SETUP, "POP3 Server listening on TCP port %d", port);
+    // Creating a thread for handling UDP requests
+    pthread_t udp_thread;
+    if (pthread_create(&udp_thread, NULL, handle_configuration_requests, (void *)&conf_server) != 0)
+    {
+        log_message(mainLogger, ERROR, SETUPCONF, "Failed to create UDP thread");
+        goto finally;
+    }
 
     err_msg = 0;
-    int ret = serve_pop3_concurrent_blocking(server);
+    int ret = serve_pop3_concurrent_blocking(pop3_server);
 
 finally:
     if (err_msg)
@@ -284,9 +389,17 @@ finally:
         log_message(mainLogger, ERROR, SETUP, err_msg);
         ret = 1;
     }
-    if (server >= 0)
+
+    // Closing sockets
+    if (pop3_server >= 0)
     {
-        close(server);
+        close(pop3_server);
     }
+
+    if (conf_server >= 0)
+    {
+        close(conf_server);
+    }
+
     return ret;
 }
