@@ -14,7 +14,8 @@
 typedef enum
 {
     INFO,
-    ERROR
+    ERROR,
+    DEBUG
 } LogLevel;
 
 typedef enum

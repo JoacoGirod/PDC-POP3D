@@ -90,7 +90,6 @@ parser_state parser_feed(parserADT p, uint8_t c)
                 return resp;
             }
         }
-        printf("\n");
     }
     return PARSER_READING;
 }
