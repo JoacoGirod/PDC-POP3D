@@ -8,7 +8,7 @@ struct GlobalConfiguration *get_global_configuration()
     return &global_config_instance;
 }
 
-void logGlobalConfiguration(Logger *mainLogger)
+void log_global_configuration(Logger *mainLogger)
 {
     log_message(mainLogger, INFO, SETUP, "<<INITIAL SERVER CONFIGURATION>>");
     log_message(mainLogger, INFO, SETUP, "POP3 Address (TCP) : %s", global_config_instance.pop3_addr);

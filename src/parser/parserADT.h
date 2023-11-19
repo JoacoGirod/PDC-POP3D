@@ -28,8 +28,8 @@ parser_state parser_feed(parserADT p, uint8_t c);
 void *parser_get_data(parserADT p);
 
 // Forward declaration for struct connection
-struct connection;
+struct Connection;
 
-int parse_input(const uint8_t *input, struct connection *conn, struct buffer *dataSendingBuffer);
+int parse_input(const uint8_t *input, struct Connection *conn, struct buffer *dataSendingBuffer);
 
 #endif

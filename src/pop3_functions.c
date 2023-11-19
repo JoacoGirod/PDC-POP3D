@@ -4,7 +4,7 @@
 #define MAX_FILENAME_LENGTH 256
 #define MAX_EMAILS 64
 
-void retrieve_emails(const char *user_path, struct connection *conn)
+void retrieve_emails(const char *user_path, struct Connection *conn)
 {
     // Process emails in 'cur' directory
     retrieve_emails_from_directory(user_path, "cur", conn);
@@ -13,7 +13,7 @@ void retrieve_emails(const char *user_path, struct connection *conn)
     retrieve_emails_from_directory(user_path, "new", conn);
 }
 
-void retrieve_emails_from_directory(const char *user_path, const char *dir_name, struct connection *conn)
+void retrieve_emails_from_directory(const char *user_path, const char *dir_name, struct Connection *conn)
 {
     char dir_path[MAX_PATH_LENGTH];
     snprintf(dir_path, MAX_PATH_LENGTH, "%s/%s", user_path, dir_name);
@@ -30,7 +30,7 @@ void retrieve_emails_from_directory(const char *user_path, const char *dir_name,
     {
         if (entry->d_type == DT_REG)
         { // Check if it's a regular file
-            if (conn->numEmails < MAX_EMAILS)
+            if (conn->num_emails < MAX_EMAILS)
             {
                 struct Mail mail;
                 mail.index = get_next_index();
@@ -40,7 +40,7 @@ void retrieve_emails_from_directory(const char *user_path, const char *dir_name,
                 mail.status = UNCHANGED;
 
                 // Add the mail to the user's mailbox
-                conn->mails[conn->numEmails++] = mail;
+                conn->mails[conn->num_emails++] = mail;
 
                 // Process the mail or store it as needed
                 // (You can add your logic here)
@@ -94,8 +94,8 @@ void microTesting()
     char *user_path = "/tmp/Maildir/testuser";
 
     // Initialize a connection for the user
-    struct connection conn;
-    conn.numEmails = 0; // Initialize the number of emails to 0
+    struct Connection conn;
+    conn.num_emails = 0; // Initialize the number of emails to 0
 
     // Process emails in 'cur' directory for the user
     retrieve_emails_from_directory(user_path, "cur", &conn);

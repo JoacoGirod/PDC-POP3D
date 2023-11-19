@@ -1,5 +1,3 @@
-#define _GNU_SOURCE
-
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -34,7 +32,7 @@ int main(const int argc, char **argv)
 
     parse_args(argc, argv, mainLogger); // Function automatically sets the Global Configuration
 
-    logGlobalConfiguration(mainLogger);
+    log_global_configuration(mainLogger);
 
     struct GlobalConfiguration *gConf = get_global_configuration();
 

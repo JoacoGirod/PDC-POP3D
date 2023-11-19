@@ -23,7 +23,7 @@ port(const char *s)
 }
 
 static void
-user(char *s, struct users *user)
+user(char *s, struct Users *user)
 {
     char *p = strchr(s, ':');
     if (p == NULL)

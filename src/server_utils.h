@@ -28,6 +28,14 @@
 #define MAX_PATH_LENGTH 256
 #define MAX_FILENAME_LENGTH 256
 #define MAX_EMAILS 64
+#define MAX_USERNAME_LENGTH 255
+
+enum ConnectionStatus
+{
+    AUTHORIZATION,
+    TRANSACTION,
+    UPDATE
+};
 
 enum MailStatus
 {
@@ -48,22 +56,24 @@ struct Mail
 /**
  * Structure used to transport information from the distributor thread onto the client handler threads
  */
-struct connection
+struct Connection
 {
     int fd;
-    socklen_t addrlen;
+    socklen_t addr_len;
     struct sockaddr_in6 addr;
     Logger *logger;
     struct Mail mails[MAX_EMAILS];
-    size_t numEmails;
+    size_t num_emails;
+    char username[MAX_USERNAME_LENGTH];
+    enum ConnectionStatus status;
 };
 
-void send_data(const char *data, buffer *pBuffer, struct connection *conn);
+void send_data(const char *data, buffer *pBuffer, struct Connection *conn);
 int serve_pop3_concurrent_blocking(const int server);
 void *handle_configuration_requests(void *arg);
 void handle_client_without_threading(int client, const struct sockaddr_in6 *caddr);
 void *handle_connection_pthread(void *args);
-void pop3_handle_connection(struct connection *conn);
+void pop3_handle_connection(struct Connection *conn);
 void sigterm_handler(const int signal);
 
 #endif // SERVER_UTILS_H

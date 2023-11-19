@@ -8,7 +8,7 @@ void sigterm_handler(const int signal)
 }
 
 // Main Thread Handling Function
-void pop3_handle_connection(struct connection *conn)
+void pop3_handle_connection(struct Connection *conn)
 {
     log_message(conn->logger, INFO, THREADMAINHANDLER, "Executing Main Thread Handler");
 
@@ -35,7 +35,7 @@ void pop3_handle_connection(struct connection *conn)
     ssize_t bytesRead;
     int totalBytesRead;
 
-    // Mantain the call and response with the client
+    // Maintain the call and response with the client
     do
     {
         uint8_t *basePointer = buffer_write_ptr(pClientBuffer, &availableSpace);
@@ -45,13 +45,13 @@ void pop3_handle_connection(struct connection *conn)
         // Construct complete commands with the segmented data received through the TCP Stream
         do
         {
-            // TODO add relevant flags to this call
+            log_message(conn->logger, INFO, THREADMAINHANDLER, "Awaiting for Command");
+
             bytesRead = recv(conn->fd, ptr, availableSpace, 0);
-            totalBytesRead = +bytesRead;
+            totalBytesRead += bytesRead;
 
             if (totalBytesRead > 255) // Max Length defined in RFC Extension
             {
-                // TODO improve error handling here
                 log_message(conn->logger, ERROR, THREADMAINHANDLER, "Received command exceeds the maximum allowed length");
                 error = true;
                 break;
@@ -59,9 +59,25 @@ void pop3_handle_connection(struct connection *conn)
 
             if (bytesRead > 0) // Some bytes read
             {
-                ptr[bytesRead] = '\0';                                  // Null termination
+                ptr[bytesRead] = '\0'; // Null termination
+                log_message(conn->logger, INFO, THREADMAINHANDLER, "Streamed by TCP: '%s'", ptr);
                 buffer_write_adv(pClientBuffer, bytesRead);             // Advance buffer
                 ptr = buffer_write_ptr(pClientBuffer, &availableSpace); // Update pointer
+
+                char *commandPtr = strstr((char *)basePointer, "\r\n");
+                while (commandPtr != NULL)
+                {
+                    *commandPtr = '\0'; // Null-terminate the command
+                    log_message(conn->logger, INFO, THREADMAINHANDLER, "Command sent to parser: '%s'", basePointer);
+                    parse_input(basePointer, conn, pServerBuffer);
+
+                    // Move to the next command (if any)
+                    basePointer = (uint8_t *)(commandPtr + 2);              // Move beyond the "\r\n"
+                    ptr = buffer_write_ptr(pClientBuffer, &availableSpace); // Update pointer
+
+                    // Check if there is another complete command in the remaining data
+                    commandPtr = strstr((char *)basePointer, "\r\n");
+                }
             }
             else if (bytesRead == 0) // Connection loss
             {
@@ -74,15 +90,9 @@ void pop3_handle_connection(struct connection *conn)
                 error = true;
                 break;
             }
-        } while (strstr((char *)basePointer, "\r\n") == NULL && !error); // Checking if the command is unfinished
+        } while (!error); // Continue reading until a complete command is processed
 
-        if (!error)
-        {
-            log_message(conn->logger, INFO, THREADMAINHANDLER, "Command sent to parser (should be complete): '%s'", basePointer);
-            // parse_input(basePointer, conn->logger);
-            parse_input(basePointer, conn, pServerBuffer);
-        }
-
+        log_message(conn->logger, INFO, THREADMAINHANDLER, "Resetting client buffer");
         buffer_reset(pClientBuffer);
 
     } while (!error && bytesRead > 0);
@@ -92,7 +102,8 @@ void pop3_handle_connection(struct connection *conn)
 }
 
 // Function to send data
-void send_data(const char *data, buffer *pBuffer, struct connection *conn)
+// Function to send data, including support for multi-line responses
+void send_data(const char *data, buffer *pBuffer, struct Connection *conn /*, bool isMultiLine*/)
 {
     size_t dataLength = strlen(data);
 
@@ -113,6 +124,19 @@ void send_data(const char *data, buffer *pBuffer, struct connection *conn)
         return;
     }
 
+    // Check if the data is part of a multi-line response
+    // if (isMultiLine)
+    // {
+    //     // Check if the first character of the data is the termination octet
+    //     if (data[0] == '.')
+    //     {
+    //         // Byte-stuff the data by pre-pending the termination octet
+    //         memmove(basePointer + 1, data, dataLength);
+    //         basePointer[0] = '.';
+    //         dataLength++;
+    //     }
+    // }
+
     // Copy the data to the buffer
     memcpy(basePointer, data, dataLength);
 
@@ -132,7 +156,7 @@ void send_data(const char *data, buffer *pBuffer, struct connection *conn)
 // Modify the function call to pass the connection struct
 void *handle_connection_pthread(void *args)
 {
-    struct connection *c = args;
+    struct Connection *c = args;
 
     char threadLogFileName[20]; // Adjust the size as needed
     sprintf(threadLogFileName, "threadLog%d.log", c->fd);
@@ -163,9 +187,9 @@ void handle_client_without_threading(int client, const struct sockaddr_in6 *cadd
     log_message(clientThreadLogs, ERROR, ITERATIVETHREAD, "Iterative thread running");
 
     // Create a connection struct with the necessary information
-    struct connection conn;
+    struct Connection conn;
     conn.fd = client;
-    conn.addrlen = sizeof(struct sockaddr_in6);
+    conn.addr_len = sizeof(struct sockaddr_in6);
     memcpy(&(conn.addr), caddr, sizeof(struct sockaddr_in6));
     conn.logger = clientThreadLogs; // You can set it to NULL or initialize a separate logger here
 
@@ -233,7 +257,7 @@ int serve_pop3_concurrent_blocking(const int server)
         else
         {
             // TODO(juan): limitar la cantidad de hilos concurrentes
-            struct connection *c = malloc(sizeof(struct connection));
+            struct Connection *c = malloc(sizeof(struct Connection));
             if (c == NULL)
             {
                 // We transition into a non-threaded manner
@@ -244,7 +268,7 @@ int serve_pop3_concurrent_blocking(const int server)
             {
                 pthread_t tid;
                 c->fd = client;
-                c->addrlen = caddrlen;
+                c->addr_len = caddrlen;
                 memcpy(&(c->addr), &caddr, caddrlen);
                 log_message(distributorThreadLogger, INFO, DISTRIBUTORTHREAD, "Attempting to create a Thread");
                 if (pthread_create(&tid, 0, handle_connection_pthread, c))
