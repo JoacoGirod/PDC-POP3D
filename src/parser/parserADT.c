@@ -8,7 +8,6 @@
 #include "pop3_functions.h"
 
 #define CAPA_MESSAGE "+OK\r\nCAPA\r\nUSER\r\nPIPELINING\r\n.\r\n"
-#define BASE_DIR "/tmp/Maildir"
 #define MAX_FILE_PATH 700
 #define MAX_COMMAND_LENGTH 255
 #define BUFFER_SIZE 1024
@@ -143,6 +142,8 @@ int user_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 }
 int pass_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
+    struct GlobalConfiguration *gConf = get_global_configuration();
+
     // find user and see if passwords match
     for (size_t i = 0; i < get_global_configuration()->numUsers; i++)
     {
@@ -160,7 +161,7 @@ int pass_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
                 // retrieve user's emails
                 char filePath[MAX_FILE_PATH];
-                snprintf(filePath, sizeof(filePath), "%s/%s", BASE_DIR, conn->username);
+                snprintf(filePath, sizeof(filePath), "%s/%s", gConf->maildir_folder, conn->username);
                 retrieve_emails(filePath, conn);
                 return 0;
             }
@@ -221,6 +222,8 @@ int list_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
 int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
+    struct GlobalConfiguration *gConf = get_global_configuration();
+
     // gets the email index and subtracts 1 because mails are numbered
     size_t mailIndex = atoi(argument) - 1;
     // checks if the emailIndex is valid
@@ -235,7 +238,7 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
     // constructs file path
     char filePath[MAX_FILE_PATH];
-    snprintf(filePath, sizeof(filePath), "%s/%s/%s/%s", BASE_DIR, conn->username, mail->folder, mail->filename);
+    snprintf(filePath, sizeof(filePath), "%s/%s/%s/%s", gConf->maildir_folder, conn->username, mail->folder, mail->filename);
     fprintf(stdout, "\n\nFile path: %s\n\n", filePath);
 
     // Open the file for reading

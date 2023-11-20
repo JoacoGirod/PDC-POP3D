@@ -9,6 +9,8 @@
 #define MAX_EMAILS 64
 #define MAX_USERS 10
 #define INITIAL_BUFFER_SIZE 2048
+#define INITIAL_LOG_FOLDER_NAME "log"
+#define INITIAL_MAILDIRDIR_LOCATION "/tmp/Maildir"
 
 struct Users
 {

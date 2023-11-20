@@ -103,3 +103,39 @@ void microTesting()
     // Process emails in 'new' directory for the user
     retrieve_emails_from_directory(user_path, "new", &conn);
 }
+
+int delete_file(const char *file_path)
+{
+    if (remove(file_path) == 0)
+    {
+        printf("File deleted successfully: %s\n", file_path);
+        return 0; // Success
+    }
+    else
+    {
+        perror("Error deleting file");
+        return -1; // Failure
+    }
+}
+
+int move_file(const char *user_path, const char *filename)
+{
+    char source_path[MAX_PATH_LENGTH];
+    char dest_path[MAX_PATH_LENGTH];
+
+    // Construct source and destination paths
+    snprintf(source_path, MAX_PATH_LENGTH, "%s/new/%s", user_path, filename);
+    snprintf(dest_path, MAX_PATH_LENGTH, "%s/cur/%s", user_path, filename);
+
+    // Rename the file (move from 'new' to 'cur')
+    if (rename(source_path, dest_path) == 0)
+    {
+        printf("File moved successfully: %s\n", filename);
+        return 0; // Success
+    }
+    else
+    {
+        perror("Error moving file");
+        return -1; // Failure
+    }
+}

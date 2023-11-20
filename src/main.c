@@ -41,13 +41,13 @@ static void log_global_configuration(Logger *mainLogger)
 // Creates Servers
 int main(const int argc, char **argv)
 {
+    struct GlobalConfiguration *gConf = get_global_configuration();
+    gConf->buffers_size = INITIAL_BUFFER_SIZE;
+    gConf->logs_folder = INITIAL_LOG_FOLDER_NAME;
+    gConf->maildir_folder = INITIAL_MAILDIRDIR_LOCATION;
     Logger *mainLogger = initialize_logger("mainLogs.log");
 
     parse_args(argc, argv, mainLogger); // Function automatically sets the Global Configuration
-
-    struct GlobalConfiguration *gConf = get_global_configuration();
-    gConf->buffers_size = INITIAL_BUFFER_SIZE;
-    gConf->logs_folder = "logs";
 
     log_global_configuration(mainLogger);
 
