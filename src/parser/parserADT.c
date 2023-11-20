@@ -233,13 +233,18 @@ int list_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
 int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
-    struct GlobalConfiguration *g_conf = get_global_configuration();
+    Logger *logger = conn->logger;
 
     if (conn->status == AUTHORIZATION)
     {
         send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
+        log_message(logger, ERROR, COMMAND_HANDLER, " - Unknown command");
         return -1;
     }
+
+    log_message(logger, INFO, COMMAND_HANDLER, " - Retr action started");
+
+    struct GlobalConfiguration *g_conf = get_global_configuration();
 
     // gets the email index and subtracts 1 because mails are numbered
     size_t mailIndex = atoi(argument) - 1;
@@ -248,6 +253,7 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
     {
         // invalid email index
         send_data("-ERR Invalid email index\r\n", dataSendingBuffer, conn);
+        log_message(logger, ERROR, COMMAND_HANDLER, " - User entered invalid email index");
         return 1;
     }
 
@@ -262,42 +268,34 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
     FILE *file = fopen(filePath, "r");
     if (file == NULL)
     {
-        perror("Error opening mail file");
-        return -1; // Or handle the error appropriately
+        log_message(logger, ERROR, COMMAND_HANDLER, " - Error opening mail file");
+        return -1;
     }
-
-    fprintf(stdout, "after opening file\n");
 
     // sends initial response
     char initial[64];
     sprintf(initial, "+OK %zu octets\r\n", mail->octets);
     send_data(initial, dataSendingBuffer, conn);
 
-    // TODO: transition to correct buffer
     char buffer[BUFFER_SIZE];
     size_t bytesRead;
 
-    log_message(conn->logger, INFO, ARGPARSER, "Before while loop");
-    while ((bytesRead = fread(buffer, 1, sizeof(buffer), file)) > 0)
+    log_message(logger, INFO, COMMAND_HANDLER, " - Printing mail data to client");
+    while ((bytesRead = fread(buffer, 1, sizeof(buffer) - 1, file)) > 0)
     {
-        // fprintf(stdout, buffer);
-        log_message(conn->logger, INFO, ARGPARSER, "Inside while loop");
-
+        buffer[bytesRead] = '\0';
         send_data(buffer, dataSendingBuffer, conn);
-
-        // TODO: clear buffer if mail is larger than 1024 bytes
-        if (bytesRead >= 1024)
-        {
-        }
+        memset(buffer, 0, sizeof(buffer));
     }
 
-    // sends any remaining data in the buffer
-    send_data("", dataSendingBuffer, conn);
+    log_message(logger, INFO, COMMAND_HANDLER, " - Mail data printed to client");
+
     // closes file
     fclose(file);
 
     // marks mail as RETRIEVED
     mail->status = RETRIEVED;
+    log_message(logger, INFO, COMMAND_HANDLER, " - Mail marked as RETRIEVED");
 
     send_data(".\r\n", dataSendingBuffer, conn);
 
@@ -307,9 +305,12 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 // sets specific Mail to state DELETED
 int dele_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
+    Logger *logger = conn->logger;
+    log_message(logger, INFO, COMMAND_HANDLER, " - Dele action started");
     if (conn->status == AUTHORIZATION)
     {
         send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
+        log_message(logger, ERROR, COMMAND_HANDLER, " - DELE command in AUTHORIZATION state forbidden");
         return -1;
     }
 
@@ -320,11 +321,13 @@ int dele_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
     {
         // invalid email index
         send_data("-ERR Invalid email index\r\n", dataSendingBuffer, conn);
-        return 1;
+        log_message(logger, ERROR, COMMAND_HANDLER, " - User entered invalid email index");
+        return -1;
     }
 
     // sets the mail status to DELETED
     conn->mails[mailIndex].status = DELETED;
+    log_message(logger, INFO, COMMAND_HANDLER, " - Mail marked as DELETED");
 
     send_data("+OK Marked to be deleted. \r\n", dataSendingBuffer, conn);
 
@@ -365,23 +368,33 @@ int rset_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
 int quit_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
+    Logger *logger = conn->logger;
+    log_message(logger, INFO, COMMANDPARSER, " - Quit action started");
+
     // Envía la respuesta al cliente
     send_data("+OK POP3 server signing off. \r\n", dataSendingBuffer, conn);
+
+    log_message(logger, INFO, CONNECTION, " - Closing connection");
 
     // Cierra la conexión si está en estado de AUTORIZACIÓN
     if (conn->status == AUTHORIZATION)
     {
-        close(conn->fd);
+        if (close(conn->fd) == -1)
+        {
+            log_message(logger, ERROR, CONNECTION, " - Error closing connection (AUTHORIZATION state)");
+            return -1;
+        }
+        log_message(logger, INFO, CONNECTION, " - Connection closed (AUTHORIZATION state)");
         return 1;
     }
 
     // Marca la conexión como en estado de ACTUALIZACIÓN
     conn->status = UPDATE;
+    log_message(logger, INFO, CONNECTION, " - Connection transitioned to UPDATE state");
 
     // Procesa cada correo electrónico
     for (size_t i = 0; i < conn->num_emails; ++i)
     {
-        fprintf(stdout, "Mail status: %d\n", conn->mails[i].status);
         if (conn->mails[i].status == DELETED)
         {
             char filePath[MAX_FILE_PATH];
@@ -392,15 +405,22 @@ int quit_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
         {
             if (move_file_new_to_cur(BASE_DIR, conn->username, conn->mails[i].filename) == -1)
             {
-                perror("Error moving file from new to cur");
+                log_message(logger, ERROR, CONNECTION, " - Error moving file from new to cur");
+                return -1;
             }
         }
         // Restablece el estado del correo a UNCHANGED
         conn->mails[i].status = UNCHANGED;
     }
+    log_message(logger, INFO, CONNECTION, " - All emails processed");
 
     // Cierra la conexión
-    close(conn->fd);
+    if (close(conn->fd) == -1)
+    {
+        log_message(logger, ERROR, CONNECTION, " - Error closing connection (UPDATE state)");
+        return -1;
+    }
+    log_message(logger, INFO, CONNECTION, " - Connection closed (UPDATE state)");
 
     return 1;
 }

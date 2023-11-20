@@ -142,6 +142,12 @@ void log_message(Logger *logger, LogLevel level, LogComponent component, const c
     // Print log component
     switch (component)
     {
+    case COMMAND_HANDLER:
+        fprintf(logFile, "COMMAND HANDLER");
+        break;
+    case CONNECTION:
+        fprintf(logFile, "CONNECTION");
+        break;
     case COMMANDPARSER:
         fprintf(logFile, "COMMAND PARSER");
         break;
