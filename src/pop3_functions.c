@@ -82,11 +82,22 @@ size_t get_file_size(const char *dir_path, const char *file_name)
         return 0;
     }
 
-    fseek(file, 0, SEEK_END);
-    size_t size = ftell(file);
+    if (fseek(file, 0, SEEK_END) != 0)
+    {
+        perror("Error setting file position");
+        fclose(file);
+        return 0;
+    }
+    long size = ftell(file);
+    if (size == -1)
+    {
+        perror("Error getting file size");
+        fclose(file);
+        return 0;
+    }
     fclose(file);
 
-    return size;
+    return (size_t)size;
 }
 
 void microTesting()
@@ -106,6 +117,14 @@ void microTesting()
 
 int delete_file(const char *file_path)
 {
+    // Check if the file exists before attempting to delete it
+    if (access(file_path, F_OK) != 0)
+    {
+        perror("File doesn't exist");
+        return -1; // Failure
+    }
+
+    // Attempt to delete the file
     if (remove(file_path) == 0)
     {
         printf("File deleted successfully: %s\n", file_path);
@@ -118,17 +137,42 @@ int delete_file(const char *file_path)
     }
 }
 
-int move_file(const char *user_path, const char *filename)
+int move_file(const char *source_path, const char *dest_path)
 {
-    char source_path[MAX_PATH_LENGTH];
-    char dest_path[MAX_PATH_LENGTH];
+    // Ensure the source directory exists
+    if (access(source_path, F_OK) != 0)
+    {
+        perror("Source directory doesn't exist");
+        return -1; // Failure
+    }
 
-    // Construct source and destination paths
-    snprintf(source_path, MAX_PATH_LENGTH, "%s/new/%s", user_path, filename);
-    snprintf(dest_path, MAX_PATH_LENGTH, "%s/cur/%s", user_path, filename);
+    // Ensure the destination directory exists; create it if not
+    if (access(dest_path, F_OK) != 0)
+    {
+        if (mkdir(dest_path, 0777) != 0)
+        {
+            perror("Error creating destination directory");
+            return -1; // Failure
+        }
+    }
 
-    // Rename the file (move from 'new' to 'cur')
-    if (rename(source_path, dest_path) == 0)
+    // Get the filename from the source path
+    const char *filename = strrchr(source_path, '/');
+    if (filename == NULL)
+    {
+        filename = source_path;
+    }
+    else
+    {
+        filename++; // Move past the '/'
+    }
+
+    // Construct the full destination path
+    char full_dest_path[MAX_PATH_LENGTH];
+    snprintf(full_dest_path, MAX_PATH_LENGTH, "%s/%s", dest_path, filename);
+
+    // Rename the file (move from source to destination)
+    if (rename(source_path, full_dest_path) == 0)
     {
         printf("File moved successfully: %s\n", filename);
         return 0; // Success
@@ -138,4 +182,16 @@ int move_file(const char *user_path, const char *filename)
         perror("Error moving file");
         return -1; // Failure
     }
+}
+
+int move_file_new_to_cur(const char *base_dir, char *username, const char *filename)
+{
+
+    char fromPath[MAX_PATH_LENGTH];
+    snprintf(fromPath, sizeof(fromPath), "%s/%s/new/%s", base_dir, username, filename);
+
+    char toPath[MAX_PATH_LENGTH];
+    snprintf(toPath, sizeof(toPath), "%s/%s/cur/%s", base_dir, username, filename);
+
+    return move_file(fromPath, toPath);
 }

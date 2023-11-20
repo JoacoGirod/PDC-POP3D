@@ -367,41 +367,41 @@ int rset_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
 int quit_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
-    send_data("+OK Logging out. \r\n", dataSendingBuffer, conn);
+    // Envía la respuesta al cliente
+    send_data("+OK POP3 server signing off. \r\n", dataSendingBuffer, conn);
 
-    // if (conn->status == AUTHORIZATION)
-    // {
-    //     send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
-    //     return -1;
-    // }
-    // else
-    // {
-    //     fprintf(stdout, "INSIDE QUIT ACTION");
-    //     send_data(stdout, "inside quit else: conn status: %d", conn->status);
-    //     // set connection status as update
-    //     conn->status = UPDATE;
+    // Cierra la conexión si está en estado de AUTORIZACIÓN
+    if (conn->status == AUTHORIZATION)
+    {
+        close(conn->fd);
+        return 1;
+    }
 
-    //     // loops through each email and sets its status to UNCHANGED
-    //     for (size_t i = 0; i < conn->num_emails; ++i)
-    //     {
-    //         if (conn->mails[i].status == DELETED)
-    //         {
-    //             char filePath[MAX_FILE_PATH];
-    //             snprintf(filePath, sizeof(filePath), "%s/%s/%s/%s", BASE_DIR, conn->username, conn->mails[i].folder, conn->mails[i].filename);
-    //             delete_file(filePath);
-    //         }
-    //         else if (conn->mails[i].status == RETRIEVED)
-    //         {
-    //             fprintf(stdout, "MOVING FILE: %s", conn->mails[i].filename);
-    //             char userPath[MAX_FILE_PATH];
-    //             snprintf(userPath, sizeof(userPath), "%s/%s", BASE_DIR, conn->username);
-    //             char filePath[MAX_FILE_PATH];
-    //             snprintf(filePath, sizeof(filePath), "%s/%s/%s/%s", BASE_DIR, conn->username, conn->mails[i].folder, conn->mails[i].filename);
-    //             move_file(userPath, filePath);
-    //         }
-    //     }
-    // }
+    // Marca la conexión como en estado de ACTUALIZACIÓN
+    conn->status = UPDATE;
 
+    // Procesa cada correo electrónico
+    for (size_t i = 0; i < conn->num_emails; ++i)
+    {
+        fprintf(stdout, "Mail status: %d\n", conn->mails[i].status);
+        if (conn->mails[i].status == DELETED)
+        {
+            char filePath[MAX_FILE_PATH];
+            snprintf(filePath, sizeof(filePath), "%s/%s/%s/%s", BASE_DIR, conn->username, conn->mails[i].folder, conn->mails[i].filename);
+            delete_file(filePath);
+        }
+        else if (conn->mails[i].status == RETRIEVED)
+        {
+            if (move_file_new_to_cur(BASE_DIR, conn->username, conn->mails[i].filename) == -1)
+            {
+                perror("Error moving file from new to cur");
+            }
+        }
+        // Restablece el estado del correo a UNCHANGED
+        conn->mails[i].status = UNCHANGED;
+    }
+
+    // Cierra la conexión
     close(conn->fd);
 
     return 1;
