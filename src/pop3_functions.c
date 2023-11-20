@@ -88,7 +88,7 @@ size_t get_file_size(const char *dir_path, const char *file_name)
         fclose(file);
         return 0;
     }
-    size_t size = ftell(file);
+    long size = ftell(file);
     if (size == -1)
     {
         perror("Error getting file size");
@@ -97,7 +97,7 @@ size_t get_file_size(const char *dir_path, const char *file_name)
     }
     fclose(file);
 
-    return size;
+    return (size_t)size;
 }
 
 void microTesting()
