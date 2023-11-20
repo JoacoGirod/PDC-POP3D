@@ -9,8 +9,9 @@
 #define MAX_EMAILS 64
 #define MAX_USERS 10
 #define INITIAL_BUFFER_SIZE 2048
-#define INITIAL_LOG_FOLDER_NAME "log"
+#define INITIAL_LOG_FOLDER_NAME "logs"
 #define INITIAL_MAILDIRDIR_LOCATION "/tmp/Maildir"
+#define INITIAL_AUTHORIZATION_TOKEN "adminadmin"
 
 struct Users
 {
@@ -29,6 +30,7 @@ struct GlobalConfiguration
     size_t buffers_size;
     char *logs_folder;
     char *maildir_folder;
+    char *authorization_token;
 };
 
 struct GlobalStatistics

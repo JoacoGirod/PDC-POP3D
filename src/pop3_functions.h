@@ -17,5 +17,10 @@ void retrieve_emails(const char *user_path, struct Connection *conn);
 void retrieve_emails_from_directory(const char *user_path, const char *dir_name, struct Connection *conn);
 int get_next_index();
 size_t get_file_size(const char *dir_path, const char *file_name);
+
+int move_file_new_to_cur(const char *base_dir, char *username, const char *filename);
+int move_file(const char *user_path, const char *filename);
+int delete_file(const char *file_path);
+
 void microTesting();
 #endif // POP3_FUNCTION_H

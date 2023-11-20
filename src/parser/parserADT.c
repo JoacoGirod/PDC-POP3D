@@ -116,6 +116,376 @@ bool hasnt_argument(const char *arg)
     return arg == NULL || strlen(arg) == 0;
 }
 
+// aux function for STAT command action
+size_t calculate_total_email_bytes(struct Connection *conn)
+{
+    size_t totalBytes = 0;
+
+    for (size_t i = 0; i < conn->num_emails; ++i)
+    {
+        totalBytes += conn->mails[i].octets;
+    }
+
+    return totalBytes;
+}
+
+// --------------------------------------------- ACTIONS ---------------------------------------------
+int user_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
+{
+    // microTesting();
+    // retrieve_emails(BASE_DIR, conn);
+
+    strcpy(conn->username, argument);
+    // always sends OK
+    send_data("+OK \r\n", dataSendingBuffer, conn);
+    return 0;
+}
+int pass_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
+{
+    struct GlobalConfiguration *g_conf = get_global_configuration();
+
+    // find user and see if passwords match
+    for (size_t i = 0; i < get_global_configuration()->numUsers; i++)
+    {
+        // cycle through usernames and see if they match
+        if (strcmp(conn->username, get_global_configuration()->users[i].name) == 0)
+        {
+            // user found, check if passwords match
+            if (strcmp(get_global_configuration()->users[i].pass, argument) == 0)
+            {
+                // send OK
+                send_data("+OK Logged in. \r\n", dataSendingBuffer, conn);
+
+                // set connection status as TRANSACTION (user already authorized)
+                conn->status = TRANSACTION;
+
+                // retrieve user's emails
+                char filePath[MAX_FILE_PATH];
+                snprintf(filePath, sizeof(filePath), "%s/%s", g_conf->maildir_folder, conn->username);
+                retrieve_emails(filePath, conn);
+                return 0;
+            }
+            else
+            {
+                // incorrect password
+                send_data("-ERR [AUTH] Authentication failed. \r\n", dataSendingBuffer, conn);
+                return 1;
+            }
+        }
+    }
+    // user not found
+    send_data("-ERR [AUTH] Authentication failed. \r\n", dataSendingBuffer, conn);
+
+    return 0;
+}
+
+int stat_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
+{
+    if (conn->status == AUTHORIZATION)
+    {
+        send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
+        return -1;
+    }
+    // calculates number of emails and total email bytes
+    size_t numEmails = conn->num_emails;
+    size_t totalEmailBytes = calculate_total_email_bytes(conn);
+
+    // create response string
+    char response[256];
+    snprintf(response, sizeof(response), "+OK %zu %zu\r\n", numEmails, totalEmailBytes);
+
+    // print the response string
+    send_data(response, dataSendingBuffer, conn);
+
+    return 0;
+}
+
+int list_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
+{
+    if (conn->status == AUTHORIZATION)
+    {
+        send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
+        return -1;
+    }
+
+    size_t numEmails = conn->num_emails;
+
+    // creates the response header
+    char responseHeader[64];
+    snprintf(responseHeader, sizeof(responseHeader), "+OK %zu messages:\r\n", numEmails);
+
+    // sends response header
+    send_data(responseHeader, dataSendingBuffer, conn);
+
+    // loops through each email and sends its index and size
+    for (size_t i = 0; i < numEmails; ++i)
+    {
+        char emailInfo[64];
+        snprintf(emailInfo, sizeof(emailInfo), "%zu %zu\r\n", i + 1, conn->mails[i].octets);
+        send_data(emailInfo, dataSendingBuffer, conn);
+    }
+
+    // sends termination line
+    send_data(".\r\n", dataSendingBuffer, conn);
+
+    return 0;
+}
+
+int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
+{
+    struct GlobalConfiguration *g_conf = get_global_configuration();
+
+    if (conn->status == AUTHORIZATION)
+    {
+        send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
+        return -1;
+    }
+
+    // gets the email index and subtracts 1 because mails are numbered
+    size_t mailIndex = atoi(argument) - 1;
+    // checks if the emailIndex is valid
+    if (mailIndex > conn->num_emails)
+    {
+        // invalid email index
+        send_data("-ERR Invalid email index\r\n", dataSendingBuffer, conn);
+        return 1;
+    }
+
+    struct Mail *mail = &conn->mails[mailIndex];
+
+    // constructs file path
+    char filePath[MAX_FILE_PATH];
+    snprintf(filePath, sizeof(filePath), "%s/%s/%s/%s", g_conf->maildir_folder, conn->username, mail->folder, mail->filename);
+    fprintf(stdout, "\n\nFile path: %s\n\n", filePath);
+
+    // Open the file for reading
+    FILE *file = fopen(filePath, "r");
+    if (file == NULL)
+    {
+        perror("Error opening mail file");
+        return -1; // Or handle the error appropriately
+    }
+
+    fprintf(stdout, "after opening file\n");
+
+    // sends initial response
+    char initial[64];
+    sprintf(initial, "+OK %zu octets\r\n", mail->octets);
+    send_data(initial, dataSendingBuffer, conn);
+
+    // TODO: transition to correct buffer
+    char buffer[BUFFER_SIZE];
+    size_t bytesRead;
+
+    log_message(conn->logger, INFO, ARGPARSER, "Before while loop");
+    while ((bytesRead = fread(buffer, 1, sizeof(buffer), file)) > 0)
+    {
+        // fprintf(stdout, buffer);
+        log_message(conn->logger, INFO, ARGPARSER, "Inside while loop");
+
+        send_data(buffer, dataSendingBuffer, conn);
+
+        // TODO: clear buffer if mail is larger than 1024 bytes
+        if (bytesRead >= 1024)
+        {
+        }
+    }
+
+    // sends any remaining data in the buffer
+    send_data("", dataSendingBuffer, conn);
+    // closes file
+    fclose(file);
+
+    // marks mail as RETRIEVED
+    mail->status = RETRIEVED;
+
+    send_data(".\r\n", dataSendingBuffer, conn);
+
+    return 0;
+}
+
+// sets specific Mail to state DELETED
+int dele_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
+{
+    if (conn->status == AUTHORIZATION)
+    {
+        send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
+        return -1;
+    }
+
+    size_t mailIndex = atoi(argument) - 1;
+
+    // checks if the emailIndex is valid
+    if (mailIndex > conn->num_emails)
+    {
+        // invalid email index
+        send_data("-ERR Invalid email index\r\n", dataSendingBuffer, conn);
+        return 1;
+    }
+
+    // sets the mail status to DELETED
+    conn->mails[mailIndex].status = DELETED;
+
+    send_data("+OK Marked to be deleted. \r\n", dataSendingBuffer, conn);
+
+    return 0;
+}
+
+int noop_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
+{
+    if (conn->status == AUTHORIZATION)
+    {
+        send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
+        return -1;
+    }
+
+    // simply responds +OK
+    send_data("+OK\r\n", dataSendingBuffer, conn);
+
+    return 0;
+}
+
+int rset_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
+{
+    if (conn->status == AUTHORIZATION)
+    {
+        send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
+        return -1;
+    }
+
+    // loops through each email and sets its status to UNCHANGED
+    for (size_t i = 0; i < conn->num_emails; ++i)
+    {
+        conn->mails[i].status = UNCHANGED;
+    }
+    send_data("+OK \r\n", dataSendingBuffer, conn);
+
+    return 0;
+}
+
+int quit_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
+{
+    // Envía la respuesta al cliente
+    send_data("+OK POP3 server signing off. \r\n", dataSendingBuffer, conn);
+
+    // Cierra la conexión si está en estado de AUTORIZACIÓN
+    if (conn->status == AUTHORIZATION)
+    {
+        close(conn->fd);
+        return 1;
+    }
+
+    // Marca la conexión como en estado de ACTUALIZACIÓN
+    conn->status = UPDATE;
+
+    // Procesa cada correo electrónico
+    for (size_t i = 0; i < conn->num_emails; ++i)
+    {
+        fprintf(stdout, "Mail status: %d\n", conn->mails[i].status);
+        if (conn->mails[i].status == DELETED)
+        {
+            char filePath[MAX_FILE_PATH];
+            snprintf(filePath, sizeof(filePath), "%s/%s/%s/%s", BASE_DIR, conn->username, conn->mails[i].folder, conn->mails[i].filename);
+            delete_file(filePath);
+        }
+        else if (conn->mails[i].status == RETRIEVED)
+        {
+            if (move_file_new_to_cur(BASE_DIR, conn->username, conn->mails[i].filename) == -1)
+            {
+                perror("Error moving file from new to cur");
+            }
+        }
+        // Restablece el estado del correo a UNCHANGED
+        conn->mails[i].status = UNCHANGED;
+    }
+
+    // Cierra la conexión
+    close(conn->fd);
+
+    return 1;
+}
+
+int capa_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
+{
+    if (conn->status == AUTHORIZATION)
+    {
+        send_data(CAPA_AUTHORIZED_MESSAGE, dataSendingBuffer, conn);
+    }
+
+    send_data(CAPA_MESSAGE, dataSendingBuffer, conn);
+
+    return 0;
+}
+
+int default_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
+{
+    // invalid command ya es tirado por parser, no se que hace esto
+    send_data("-ERR Default Action \r\n", dataSendingBuffer, conn);
+
+    return 0;
+}
+
+typedef int (*command_action)(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument);
+// --------------------------------------------- COMMAND HANDLE ---------------------------------------------
+
+struct command
+{
+    const char *name;                          // command name
+    bool (*accept_arguments)(const char *arg); // function to accept arguments or not
+    command_action action;                     // action to execute
+};
+static struct command commands[] = {
+    {.name = "USER",
+     .accept_arguments = has_argument,
+     .action = user_action},
+    {.name = "PASS",
+     .accept_arguments = has_argument,
+     .action = pass_action},
+    {.name = "STAT",
+     .accept_arguments = hasnt_argument,
+     .action = stat_action},
+    {.name = "LIST",
+     .accept_arguments = can_have_argument,
+     .action = list_action},
+    {.name = "RETR",
+     .accept_arguments = has_argument,
+     .action = retr_action},
+    {.name = "DELE",
+     .accept_arguments = has_argument,
+     .action = dele_action},
+    {.name = "NOOP",
+     .accept_arguments = hasnt_argument,
+     .action = noop_action},
+    {.name = "RSET",
+     .accept_arguments = hasnt_argument,
+     .action = rset_action},
+    {.name = "QUIT",
+     .accept_arguments = hasnt_argument,
+     .action = quit_action},
+    {
+        .name = "CAPA",
+        .accept_arguments = hasnt_argument,
+        .action = capa_action,
+    },
+    {.name = "Error command",
+     .accept_arguments = can_have_argument,
+     .action = default_action}};
+
+typedef enum
+{
+    USER = 0,
+    PASS,
+    STAT,
+    LIST,
+    RETR,
+    DELE,
+    NOOP,
+    RSET,
+    QUIT,
+    CAPA,
+    ERROR_COMMAND
+} pop3_command;
+
 int strncasecmp(const char *s1, const char *s2, size_t n)
 {
     if (n == 0)
