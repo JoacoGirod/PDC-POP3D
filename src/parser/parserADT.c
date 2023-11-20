@@ -8,6 +8,8 @@
 #include "pop3_functions.h"
 
 #define CAPA_MESSAGE "+OK\r\nCAPA\r\nUSER\r\nPIPELINING\r\n.\r\n"
+#define CAPA_AUTHORIZED_MESSAGE "+OK\r\nCAPA\r\nUSER\r\nPIPELINING\r\n.\r\n"
+#define BASE_DIR "/tmp/Maildir"
 #define MAX_FILE_PATH 700
 #define MAX_COMMAND_LENGTH 255
 #define BUFFER_SIZE 1024
@@ -181,6 +183,11 @@ int pass_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
 int stat_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
+    if (conn->status == AUTHORIZATION)
+    {
+        send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
+        return -1;
+    }
     // calculates number of emails and total email bytes
     size_t numEmails = conn->num_emails;
     size_t totalEmailBytes = calculate_total_email_bytes(conn);
@@ -197,6 +204,12 @@ int stat_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
 int list_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
+    if (conn->status == AUTHORIZATION)
+    {
+        send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
+        return -1;
+    }
+
     size_t numEmails = conn->num_emails;
 
     // creates the response header
@@ -223,6 +236,12 @@ int list_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
     struct GlobalConfiguration *gConf = get_global_configuration();
+
+    if (conn->status == AUTHORIZATION)
+    {
+        send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
+        return -1;
+    }
 
     // gets the email index and subtracts 1 because mails are numbered
     size_t mailIndex = atoi(argument) - 1;
@@ -256,22 +275,21 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
     sprintf(initial, "+OK %zu octets\r\n", mail->octets);
     send_data(initial, dataSendingBuffer, conn);
 
+    // TODO: transition to correct buffer
     char buffer[BUFFER_SIZE];
     size_t bytesRead;
 
     log_message(conn->logger, INFO, ARGPARSER, "Before while loop");
     while ((bytesRead = fread(buffer, 1, sizeof(buffer), file)) > 0)
     {
+        // fprintf(stdout, buffer);
         log_message(conn->logger, INFO, ARGPARSER, "Inside while loop");
-        // log_message(conn->logger, INFO, ARGPARSER, buffer);
-        fprintf(stdout, "MAIL INFOOOOO");
-        // fprintf(stdout, "Bytes read %zu\n\n Buffer: %s\n\n", bytesRead, buffer);
+
         send_data(buffer, dataSendingBuffer, conn);
 
-        // Check if the dataSendingBuffer is full and send it
-        if (dataSendingBuffer->write - dataSendingBuffer->read > BUFFER_SIZE - 1024)
+        // TODO: clear buffer if mail is larger than 1024 bytes
+        if (bytesRead >= 1024)
         {
-            send_data("", dataSendingBuffer, conn);
         }
     }
 
@@ -291,6 +309,12 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 // sets specific Mail to state DELETED
 int dele_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
+    if (conn->status == AUTHORIZATION)
+    {
+        send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
+        return -1;
+    }
+
     size_t mailIndex = atoi(argument) - 1;
 
     // checks if the emailIndex is valid
@@ -311,6 +335,12 @@ int dele_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
 int noop_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
+    if (conn->status == AUTHORIZATION)
+    {
+        send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
+        return -1;
+    }
+
     // simply responds +OK
     send_data("+OK\r\n", dataSendingBuffer, conn);
 
@@ -319,6 +349,12 @@ int noop_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
 int rset_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
+    if (conn->status == AUTHORIZATION)
+    {
+        send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
+        return -1;
+    }
+
     // loops through each email and sets its status to UNCHANGED
     for (size_t i = 0; i < conn->num_emails; ++i)
     {
@@ -333,10 +369,39 @@ int quit_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 {
     send_data("+OK Logging out. \r\n", dataSendingBuffer, conn);
 
-    // set connection status as update
-    conn->status = UPDATE;
+    // if (conn->status == AUTHORIZATION)
+    // {
+    //     send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
+    //     return -1;
+    // }
+    // else
+    // {
+    //     fprintf(stdout, "INSIDE QUIT ACTION");
+    //     send_data(stdout, "inside quit else: conn status: %d", conn->status);
+    //     // set connection status as update
+    //     conn->status = UPDATE;
 
-    //
+    //     // loops through each email and sets its status to UNCHANGED
+    //     for (size_t i = 0; i < conn->num_emails; ++i)
+    //     {
+    //         if (conn->mails[i].status == DELETED)
+    //         {
+    //             char filePath[MAX_FILE_PATH];
+    //             snprintf(filePath, sizeof(filePath), "%s/%s/%s/%s", BASE_DIR, conn->username, conn->mails[i].folder, conn->mails[i].filename);
+    //             delete_file(filePath);
+    //         }
+    //         else if (conn->mails[i].status == RETRIEVED)
+    //         {
+    //             fprintf(stdout, "MOVING FILE: %s", conn->mails[i].filename);
+    //             char userPath[MAX_FILE_PATH];
+    //             snprintf(userPath, sizeof(userPath), "%s/%s", BASE_DIR, conn->username);
+    //             char filePath[MAX_FILE_PATH];
+    //             snprintf(filePath, sizeof(filePath), "%s/%s/%s/%s", BASE_DIR, conn->username, conn->mails[i].folder, conn->mails[i].filename);
+    //             move_file(userPath, filePath);
+    //         }
+    //     }
+    // }
+
     close(conn->fd);
 
     return 1;
@@ -344,6 +409,11 @@ int quit_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
 int capa_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
+    if (conn->status == AUTHORIZATION)
+    {
+        send_data(CAPA_AUTHORIZED_MESSAGE, dataSendingBuffer, conn);
+    }
+
     send_data(CAPA_MESSAGE, dataSendingBuffer, conn);
 
     return 0;
