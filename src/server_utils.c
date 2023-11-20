@@ -186,8 +186,12 @@ void *handle_connection_pthread(void *args)
 void handle_client_without_threading(int client, const struct sockaddr_in6 *caddr)
 {
     // Create a unique log file name for the thread
-    char threadLogFileName[20]; // Adjust the size as needed
-    sprintf(threadLogFileName, "threadLog%d.log", client);
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    long long milliseconds = (long long)tv.tv_sec * 1000 + tv.tv_usec / 1000;
+
+    char threadLogFileName[30]; // Adjust the size as needed
+    sprintf(threadLogFileName, "threadLog%lld.log", milliseconds);
 
     // Initialize the logger with the thread-specific log file
     Logger *clientThreadLogs = initialize_logger(threadLogFileName);
@@ -315,9 +319,19 @@ void *handle_configuration_requests(void *arg)
 }
 
 // Attends POP3 clients and assigns unique blocking threads to each one
-int serve_pop3_concurrent_blocking(const int server)
+void *serve_pop3_concurrent_blocking(void *server_ptr)
 {
-    Logger *distributorThreadLogger = initialize_logger("distributorThreadLogs.log");
+    int server = *((int *)server_ptr);
+
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    long long milliseconds = (long long)tv.tv_sec * 1000 + tv.tv_usec / 1000;
+
+    char threadLogFileName[50]; // Adjust the size as needed
+    sprintf(threadLogFileName, "distributorThreadLogs%lld.log", milliseconds);
+
+    Logger *distributorThreadLogger = initialize_logger(threadLogFileName);
+
     log_message(distributorThreadLogger, INFO, DISTRIBUTORTHREAD, "Awaiting for connections...");
     for (; !done;)
     {
@@ -346,7 +360,7 @@ int serve_pop3_concurrent_blocking(const int server)
                 c->addr_len = caddrlen;
                 memcpy(&(c->addr), &caddr, caddrlen);
                 log_message(distributorThreadLogger, INFO, DISTRIBUTORTHREAD, "Attempting to create a Thread");
-                if (pthread_create(&tid, 0, handle_connection_pthread, c))
+                if (pthread_create(&tid, 0, handle_connection_pthread, c) != 0)
                 {
                     free(c);
                     // We transition into a non-threaded manner
@@ -356,5 +370,5 @@ int serve_pop3_concurrent_blocking(const int server)
             }
         }
     }
-    return 0;
+    return NULL;
 }
