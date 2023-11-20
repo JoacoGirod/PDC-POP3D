@@ -22,6 +22,7 @@ typedef enum
 typedef enum
 {
     COMMANDPARSER,
+    COMMAND_HANDLER,
     ARGPARSER,
     CONFIGTHREAD,
     THREAD,
@@ -30,7 +31,8 @@ typedef enum
     SETUPPOP3,
     SETUPCONF,
     DISTRIBUTORTHREAD,
-    ITERATIVETHREAD
+    ITERATIVETHREAD,
+    CONNECTION
 } LogComponent;
 
 typedef struct
