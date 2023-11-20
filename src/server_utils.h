@@ -23,7 +23,7 @@
 #include "buffer.h"
 #include "netutils.h"
 #include "parser_automaton.h"
-#include "parserADT.h"
+#include "pop3_parserADT.h"
 
 #define MAX_PATH_LENGTH 256
 #define MAX_FILENAME_LENGTH 256

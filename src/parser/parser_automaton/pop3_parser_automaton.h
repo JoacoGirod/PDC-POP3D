@@ -3,12 +3,12 @@
 
 #include <stdint.h>
 #include "parser_automaton.h"
-#include "parserADT.h"
+#include "../parserADT.h"
 
 #define CMD_LENGTH 4
 #define ARG_MAX_LENGTH 248
+// typedef struct parserCDT *parserADT;
 typedef struct parserCDT *parserADT;
-
 // Datos
 typedef struct pop3_parser_data
 {
