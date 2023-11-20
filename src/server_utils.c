@@ -162,8 +162,12 @@ void *handle_connection_pthread(void *args)
 {
     struct Connection *c = args;
 
-    char threadLogFileName[20]; // Adjust the size as needed
-    sprintf(threadLogFileName, "threadLog%d.log", c->fd);
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    long long milliseconds = (long long)tv.tv_sec * 1000 + tv.tv_usec / 1000;
+
+    char threadLogFileName[30]; // Adjust the size as needed
+    sprintf(threadLogFileName, "threadLog%lld.log", milliseconds);
     // Initialize the logger for the client thread
     Logger *clientThreadLogs = initialize_logger(threadLogFileName);
 
