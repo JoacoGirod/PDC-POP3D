@@ -1,20 +1,28 @@
 # Trabajo Practico - Protocolos de Comunicacion - POP3D
 
 > Integrantes :
+> Iñaki Bengolea
+> Christian Tomas Ijjas,
 > Joaquin Girod,
 > Felix Lopez Menardi,
-> Christian Tomas Ijjas,
-> Iñaki Bengolea
 
 ### Useful Commands
 
 ##### Compile and Run
 
-make clean ; make ; ./pop3d
+```bash
+make clean ; make ; ./pop3d -u testuser:testuser
+```
 
 #### Testing
 
-make ; strace -ff ./pop3d ; make clean
-echo -e "hola\r\n" | nc -C localhost 1110
+```bash
+# syscall tracking
+make clean ; make all; strace -ff ./pop3d -u testuser:testuser
+# pop3 server (IPV4)
 nc -C localhost 1110
-echo "you are a config server, know your place!" | nc -u -C localhost 8080
+# pop3 server (IPV6)
+nc -6C ::1 1110
+# configuration server (IPV6)
+nc -u -C localhost 8080 #and run commands
+```

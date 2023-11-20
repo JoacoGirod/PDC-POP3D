@@ -144,7 +144,7 @@ int user_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 }
 int pass_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
-    struct GlobalConfiguration *gConf = get_global_configuration();
+    struct GlobalConfiguration *g_conf = get_global_configuration();
 
     // find user and see if passwords match
     for (size_t i = 0; i < get_global_configuration()->numUsers; i++)
@@ -163,7 +163,7 @@ int pass_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
                 // retrieve user's emails
                 char filePath[MAX_FILE_PATH];
-                snprintf(filePath, sizeof(filePath), "%s/%s", gConf->maildir_folder, conn->username);
+                snprintf(filePath, sizeof(filePath), "%s/%s", g_conf->maildir_folder, conn->username);
                 retrieve_emails(filePath, conn);
                 return 0;
             }
@@ -236,6 +236,7 @@ int list_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
     Logger *logger = conn->logger;
+
     if (conn->status == AUTHORIZATION)
     {
         send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
@@ -245,7 +246,7 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
     log_message(logger, INFO, COMMAND_HANDLER, " - Retr action started");
 
-    struct GlobalConfiguration *gConf = get_global_configuration();
+    struct GlobalConfiguration *g_conf = get_global_configuration();
 
     // gets the email index and subtracts 1 because mails are numbered
     size_t mailIndex = atoi(argument) - 1;
@@ -262,7 +263,8 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
     // constructs file path
     char filePath[MAX_FILE_PATH];
-    snprintf(filePath, sizeof(filePath), "%s/%s/%s/%s", gConf->maildir_folder, conn->username, mail->folder, mail->filename);
+    snprintf(filePath, sizeof(filePath), "%s/%s/%s/%s", g_conf->maildir_folder, conn->username, mail->folder, mail->filename);
+    fprintf(stdout, "\n\nFile path: %s\n\n", filePath);
 
     // Open the file for reading
     FILE *file = fopen(filePath, "r");

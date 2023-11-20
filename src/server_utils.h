@@ -12,7 +12,7 @@
 #include <pthread.h>
 #include <signal.h>
 #include <stdbool.h>
-
+#include <sys/time.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 
@@ -78,7 +78,7 @@ struct Connection
 };
 
 void send_data(const char *data, buffer *pBuffer, struct Connection *conn);
-int serve_pop3_concurrent_blocking(const int server);
+void *serve_pop3_concurrent_blocking(void *server_ptr);
 void *handle_configuration_requests(void *arg);
 void handle_client_without_threading(int client, const struct sockaddr_in6 *caddr);
 void *handle_connection_pthread(void *args);
