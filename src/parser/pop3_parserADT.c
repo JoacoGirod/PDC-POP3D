@@ -30,18 +30,25 @@ size_t calculate_total_email_bytes(struct Connection *conn)
 // --------------------------------------------- ACTIONS ---------------------------------------------
 int user_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
+    Logger *logger = conn->logger;
+    log_message(logger, INFO, COMMAND_HANDLER, " - USER: User action started");
     // microTesting();
     // retrieve_emails(BASE_DIR, conn);
 
     strcpy(conn->username, argument);
     // always sends OK
     send_data("+OK \r\n", dataSendingBuffer, conn);
+    log_message(logger, INFO, COMMAND_HANDLER, " - USER: User action finished");
     return 0;
 }
 int pass_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
+    Logger *logger = conn->logger;
+    log_message(logger, INFO, COMMAND_HANDLER, " - PASS: Pass action started");
+
     struct GlobalConfiguration *gConf = get_global_configuration();
 
+    log_message(logger, INFO, COMMAND_HANDLER, " - PASS: Searching for user to authenticate");
     // find user and see if passwords match
     for (size_t i = 0; i < get_global_configuration()->numUsers; i++)
     {
@@ -53,7 +60,7 @@ int pass_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
             {
                 // send OK
                 send_data("+OK Logged in. \r\n", dataSendingBuffer, conn);
-
+                log_message(logger, INFO, COMMAND_HANDLER, " - PASS: User authenticated");
                 // set connection status as TRANSACTION (user already authorized)
                 conn->status = TRANSACTION;
 
@@ -67,21 +74,25 @@ int pass_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
             {
                 // incorrect password
                 send_data("-ERR [AUTH] Authentication failed. \r\n", dataSendingBuffer, conn);
-                return 1;
+                log_message(logger, ERROR, COMMAND_HANDLER, " - PASS: Incorrect password");
+                return -1;
             }
         }
     }
     // user not found
     send_data("-ERR [AUTH] Authentication failed. \r\n", dataSendingBuffer, conn);
-
+    log_message(logger, ERROR, COMMAND_HANDLER, " - PASS: User not found");
     return 0;
 }
 
 int stat_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
+    Logger *logger = conn->logger;
+    log_message(logger, INFO, COMMAND_HANDLER, " - STAT: Stat action started");
     if (conn->status == AUTHORIZATION)
     {
         send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
+        log_message(logger, ERROR, COMMAND_HANDLER, " - STAT: STAT command in AUTHORIZATION state forbidden");
         return -1;
     }
     // calculates number of emails and total email bytes
@@ -94,15 +105,18 @@ int stat_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
     // print the response string
     send_data(response, dataSendingBuffer, conn);
-
+    log_message(logger, INFO, COMMAND_HANDLER, " - STAT: Stat action finished");
     return 0;
 }
 
 int list_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
+    Logger *logger = conn->logger;
+    log_message(logger, INFO, COMMAND_HANDLER, " - LIST: List action started");
     if (conn->status == AUTHORIZATION)
     {
         send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
+        log_message(logger, ERROR, COMMAND_HANDLER, " - LIST: LIST command in AUTHORIZATION state forbidden");
         return -1;
     }
 
@@ -125,6 +139,7 @@ int list_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
     // sends termination line
     send_data(".\r\n", dataSendingBuffer, conn);
+    log_message(logger, INFO, COMMAND_HANDLER, " - LIST: List action finished");
 
     return 0;
 }
@@ -135,11 +150,11 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
     if (conn->status == AUTHORIZATION)
     {
         send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
-        log_message(logger, ERROR, COMMAND_HANDLER, " - Unknown command");
+        log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: RETR command in AUTHORIZATION state forbidden");
         return -1;
     }
 
-    log_message(logger, INFO, COMMAND_HANDLER, " - Retr action started");
+    log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Retr action started");
 
     struct GlobalConfiguration *gConf = get_global_configuration();
 
@@ -150,7 +165,7 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
     {
         // invalid email index
         send_data("-ERR Invalid email index\r\n", dataSendingBuffer, conn);
-        log_message(logger, ERROR, COMMAND_HANDLER, " - User entered invalid email index");
+        log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: User entered invalid email index");
         return 1;
     }
 
@@ -164,7 +179,7 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
     FILE *file = fopen(filePath, "r");
     if (file == NULL)
     {
-        log_message(logger, ERROR, COMMAND_HANDLER, " - Error opening mail file");
+        log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: Error opening mail file");
         return -1;
     }
 
@@ -176,7 +191,7 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
     char buffer[BUFFER_SIZE];
     size_t bytesRead;
 
-    log_message(logger, INFO, COMMAND_HANDLER, " - Printing mail data to client");
+    log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Printing mail data to client");
     while ((bytesRead = fread(buffer, 1, sizeof(buffer) - 1, file)) > 0)
     {
         buffer[bytesRead] = '\0';
@@ -184,17 +199,18 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
         memset(buffer, 0, sizeof(buffer));
     }
 
-    log_message(logger, INFO, COMMAND_HANDLER, " - Mail data printed to client");
+    log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Mail data printed to client");
 
     // closes file
     fclose(file);
 
     // marks mail as RETRIEVED
     mail->status = RETRIEVED;
-    log_message(logger, INFO, COMMAND_HANDLER, " - Mail marked as RETRIEVED");
+    log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Mail marked as RETRIEVED");
 
     send_data(".\r\n", dataSendingBuffer, conn);
 
+    log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Retr action finished");
     return 0;
 }
 
@@ -202,11 +218,11 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 int dele_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
     Logger *logger = conn->logger;
-    log_message(logger, INFO, COMMAND_HANDLER, " - Dele action started");
+    log_message(logger, INFO, COMMAND_HANDLER, " - DELE: Dele action started");
     if (conn->status == AUTHORIZATION)
     {
         send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
-        log_message(logger, ERROR, COMMAND_HANDLER, " - DELE command in AUTHORIZATION state forbidden");
+        log_message(logger, ERROR, COMMAND_HANDLER, " - DELE: DELE command in AUTHORIZATION state forbidden");
         return -1;
     }
 
@@ -217,13 +233,13 @@ int dele_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
     {
         // invalid email index
         send_data("-ERR Invalid email index\r\n", dataSendingBuffer, conn);
-        log_message(logger, ERROR, COMMAND_HANDLER, " - User entered invalid email index");
+        log_message(logger, ERROR, COMMAND_HANDLER, " - DELE: User entered invalid email index");
         return -1;
     }
 
     // sets the mail status to DELETED
     conn->mails[mailIndex].status = DELETED;
-    log_message(logger, INFO, COMMAND_HANDLER, " - Mail marked as DELETED");
+    log_message(logger, INFO, COMMAND_HANDLER, " - DELE: Mail marked as DELETED");
 
     send_data("+OK Marked to be deleted. \r\n", dataSendingBuffer, conn);
 
@@ -232,61 +248,69 @@ int dele_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
 int noop_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
+    Logger *logger = conn->logger;
+    log_message(logger, INFO, COMMAND_HANDLER, " - NOOP: Noop action started");
     if (conn->status == AUTHORIZATION)
     {
         send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
+        log_message(logger, ERROR, COMMAND_HANDLER, " - NOOP: NOOP command in AUTHORIZATION state forbidden");
         return -1;
     }
 
     // simply responds +OK
     send_data("+OK\r\n", dataSendingBuffer, conn);
+    log_message(logger, INFO, COMMAND_HANDLER, " - NOOP: Noop action finished");
 
     return 0;
 }
 
 int rset_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
+    Logger *logger = conn->logger;
     if (conn->status == AUTHORIZATION)
     {
         send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
+        log_message(logger, ERROR, COMMAND_HANDLER, " - RSET: RSET command in AUTHORIZATION state forbidden");
         return -1;
     }
+    log_message(logger, INFO, COMMAND_HANDLER, " - RSET: Rset action started");
 
     // loops through each email and sets its status to UNCHANGED
     for (size_t i = 0; i < conn->num_emails; ++i)
     {
         conn->mails[i].status = UNCHANGED;
     }
+    log_message(logger, INFO, COMMAND_HANDLER, " - RSET: All mails marked as UNCHANGED");
     send_data("+OK \r\n", dataSendingBuffer, conn);
-
+    log_message(logger, INFO, COMMAND_HANDLER, " - RSET: Rset action finished");
     return 0;
 }
 
 int quit_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
     Logger *logger = conn->logger;
-    log_message(logger, INFO, COMMANDPARSER, " - Quit action started");
+    log_message(logger, INFO, COMMANDPARSER, " - QUIT: Quit action started");
 
     // Envía la respuesta al cliente
     send_data("+OK POP3 server signing off. \r\n", dataSendingBuffer, conn);
 
-    log_message(logger, INFO, CONNECTION, " - Closing connection");
+    log_message(logger, INFO, COMMAND_HANDLER, " - QUIT: Closing connection");
 
     // Cierra la conexión si está en estado de AUTORIZACIÓN
     if (conn->status == AUTHORIZATION)
     {
         if (close(conn->fd) == -1)
         {
-            log_message(logger, ERROR, CONNECTION, " - Error closing connection (AUTHORIZATION state)");
+            log_message(logger, ERROR, COMMAND_HANDLER, " - QUIT: Error closing connection (AUTHORIZATION state)");
             return -1;
         }
-        log_message(logger, INFO, CONNECTION, " - Connection closed (AUTHORIZATION state)");
+        log_message(logger, INFO, COMMAND_HANDLER, " - QUIT: Connection closed (AUTHORIZATION state)");
         return 1;
     }
 
     // Marca la conexión como en estado de ACTUALIZACIÓN
     conn->status = UPDATE;
-    log_message(logger, INFO, CONNECTION, " - Connection transitioned to UPDATE state");
+    log_message(logger, INFO, CONNECTION, " - QUIT: Connection transitioned to UPDATE state");
 
     // Procesa cada correo electrónico
     for (size_t i = 0; i < conn->num_emails; ++i)
@@ -301,43 +325,49 @@ int quit_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
         {
             if (move_file_new_to_cur(BASE_DIR, conn->username, conn->mails[i].filename) == -1)
             {
-                log_message(logger, ERROR, CONNECTION, " - Error moving file from new to cur");
+                log_message(logger, ERROR, CONNECTION, " - QUIT: Error moving file from new to cur");
                 return -1;
             }
         }
         // Restablece el estado del correo a UNCHANGED
         conn->mails[i].status = UNCHANGED;
     }
-    log_message(logger, INFO, CONNECTION, " - All emails processed");
+    log_message(logger, INFO, CONNECTION, " - QUIT: All emails processed");
 
     // Cierra la conexión
     if (close(conn->fd) == -1)
     {
-        log_message(logger, ERROR, CONNECTION, " - Error closing connection (UPDATE state)");
+        log_message(logger, ERROR, CONNECTION, " - QUIT: Error closing connection (UPDATE state)");
         return -1;
     }
-    log_message(logger, INFO, CONNECTION, " - Connection closed (UPDATE state)");
+    log_message(logger, INFO, CONNECTION, " - QUIT: Connection closed (UPDATE state)");
 
     return 1;
 }
 
 int capa_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
+    Logger *logger = conn->logger;
+    log_message(logger, INFO, COMMAND_HANDLER, " - CAPA: Capa action started");
     if (conn->status == AUTHORIZATION)
     {
         send_data(CAPA_AUTHORIZED_MESSAGE, dataSendingBuffer, conn);
+        log_message(logger, INFO, COMMAND_HANDLER, " - CAPA: Capa action finished in AUTHORIZATION state");
+        return 0;
     }
 
     send_data(CAPA_MESSAGE, dataSendingBuffer, conn);
-
+    log_message(logger, INFO, COMMAND_HANDLER, " - CAPA: Capa action finished in TRANSACTION state");
     return 0;
 }
 
 int default_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
+    Logger *logger = conn->logger;
+    log_message(logger, INFO, COMMAND_HANDLER, " - COMMANDO NOT FOUND: Default action started, sending -ERR");
     // invalid command ya es tirado por parser, no se que hace esto
     send_data("-ERR Default Action \r\n", dataSendingBuffer, conn);
-
+    log_message(logger, INFO, COMMAND_HANDLER, " - COMMANDO NOT FOUND: Default action finished");
     return 0;
 }
 
