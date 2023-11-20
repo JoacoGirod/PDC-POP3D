@@ -69,13 +69,13 @@ void parse_args(const int argc, char **argv, Logger *logger)
 {
     log_message(logger, INFO, ARGPARSER, "Parsing arguments");
 
-    struct GlobalConfiguration *gConf = get_global_configuration();
+    struct GlobalConfiguration *g_conf = get_global_configuration();
 
-    gConf->pop3_addr = "0.0.0.0";
-    gConf->pop3_port = 1110;
+    g_conf->pop3_addr = "0.0.0.0";
+    g_conf->pop3_port = 1110;
 
-    gConf->conf_addr = "127.0.0.1";
-    gConf->conf_port = 8080;
+    g_conf->conf_addr = "127.0.0.1";
+    g_conf->conf_port = 8080;
 
     int c;
     int nusers = 0;
@@ -96,22 +96,22 @@ void parse_args(const int argc, char **argv, Logger *logger)
             usage(argv[0]);
             break;
         case 'l':
-            gConf->pop3_addr = optarg;
+            g_conf->pop3_addr = optarg;
             break;
         case 'L':
-            gConf->conf_addr = optarg;
+            g_conf->conf_addr = optarg;
             break;
         case 'p':
-            gConf->pop3_port = port(optarg);
+            g_conf->pop3_port = port(optarg);
             break;
         case 'P':
-            gConf->conf_port = port(optarg);
+            g_conf->conf_port = port(optarg);
             break;
         case 'u':
             if (nusers < MAX_USERS)
             {
-                user(optarg, gConf->users + nusers);
-                gConf->numUsers++;
+                user(optarg, g_conf->users + nusers);
+                g_conf->numUsers++;
                 nusers++;
             }
             else

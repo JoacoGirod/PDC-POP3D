@@ -187,11 +187,11 @@ int move_file(const char *source_path, const char *dest_path)
 int move_file_new_to_cur(const char *base_dir, char *username, const char *filename)
 {
 
-    char fromPath[MAX_PATH_LENGTH];
-    snprintf(fromPath, sizeof(fromPath), "%s/%s/new/%s", base_dir, username, filename);
+    char from_path[MAX_PATH_LENGTH];
+    snprintf(from_path, sizeof(from_path), "%s/%s/new/%s", base_dir, username, filename);
 
     char toPath[MAX_PATH_LENGTH];
     snprintf(toPath, sizeof(toPath), "%s/%s/cur/%s", base_dir, username, filename);
 
-    return move_file(fromPath, toPath);
+    return move_file(from_path, toPath);
 }

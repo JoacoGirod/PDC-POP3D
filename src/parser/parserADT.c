@@ -144,7 +144,7 @@ int user_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 }
 int pass_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
-    struct GlobalConfiguration *gConf = get_global_configuration();
+    struct GlobalConfiguration *g_conf = get_global_configuration();
 
     // find user and see if passwords match
     for (size_t i = 0; i < get_global_configuration()->numUsers; i++)
@@ -163,7 +163,7 @@ int pass_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
                 // retrieve user's emails
                 char filePath[MAX_FILE_PATH];
-                snprintf(filePath, sizeof(filePath), "%s/%s", gConf->maildir_folder, conn->username);
+                snprintf(filePath, sizeof(filePath), "%s/%s", g_conf->maildir_folder, conn->username);
                 retrieve_emails(filePath, conn);
                 return 0;
             }
@@ -235,7 +235,7 @@ int list_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
 int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
-    struct GlobalConfiguration *gConf = get_global_configuration();
+    struct GlobalConfiguration *g_conf = get_global_configuration();
 
     if (conn->status == AUTHORIZATION)
     {
@@ -257,7 +257,7 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
     // constructs file path
     char filePath[MAX_FILE_PATH];
-    snprintf(filePath, sizeof(filePath), "%s/%s/%s/%s", gConf->maildir_folder, conn->username, mail->folder, mail->filename);
+    snprintf(filePath, sizeof(filePath), "%s/%s/%s/%s", g_conf->maildir_folder, conn->username, mail->folder, mail->filename);
     fprintf(stdout, "\n\nFile path: %s\n\n", filePath);
 
     // Open the file for reading

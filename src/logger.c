@@ -20,19 +20,19 @@ char *my_strdup(const char *str)
 // Function to create the logs folder if it doesn't exist
 void create_logs_folder()
 {
-    struct GlobalConfiguration *gConf = get_global_configuration();
+    struct GlobalConfiguration *g_conf = get_global_configuration();
 
     struct stat st = {0};
-    if (stat(gConf->logs_folder, &st) == -1)
+    if (stat(g_conf->logs_folder, &st) == -1)
     {
-        mkdir(gConf->logs_folder, 0700);
+        mkdir(g_conf->logs_folder, 0700);
     }
 }
 
-// Function to initialize the logger
+// Function that initializes the logger
 Logger *initialize_logger(const char *logFileName)
 {
-    struct GlobalConfiguration *gConf = get_global_configuration();
+    struct GlobalConfiguration *g_conf = get_global_configuration();
 
     if (numInitializedLoggers >= MAX_LOGGERS)
     {
@@ -54,7 +54,7 @@ Logger *initialize_logger(const char *logFileName)
     // Create the full path to the log file
     char fullLogFileName[256]; // Adjust the size as needed
 
-    snprintf(fullLogFileName, sizeof(fullLogFileName), "%s/%s", gConf->logs_folder, logFileName);
+    snprintf(fullLogFileName, sizeof(fullLogFileName), "%s/%s", g_conf->logs_folder, logFileName);
 
     logger->logFileName = my_strdup(fullLogFileName);
 
@@ -85,7 +85,7 @@ Logger *initialize_logger(const char *logFileName)
     return logger;
 }
 
-// Function to free resources associated with a specific logger
+// Frees resources associated with a specific logger
 void free_logger(Logger *logger)
 {
     if (logger != NULL)
