@@ -29,7 +29,7 @@
 #define MAX_FILENAME_LENGTH 256
 #define MAX_EMAILS 64
 #define MAX_USERNAME_LENGTH 255
-
+#define MAX_COMMAND_LENGTH 255 // Max Length defined in RFC Extension
 enum ConnectionStatus
 {
     AUTHORIZATION,
@@ -51,6 +51,14 @@ struct Mail
     char filename[MAX_FILENAME_LENGTH];
     char folder[4]; // Can only be tmp, cur or new
     enum MailStatus status;
+};
+
+// Structure to hold client information
+struct UDPClientInfo
+{
+    int udp_server;
+    struct sockaddr_in *client_addr;
+    socklen_t client_addr_len;
 };
 
 /**

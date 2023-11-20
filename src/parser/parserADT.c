@@ -11,7 +11,7 @@
 #define BASE_DIR "/tmp/Maildir"
 #define MAX_FILE_PATH 700
 #define MAX_COMMAND_LENGTH 255
-#define BUFFER_SIZE 2048
+#define BUFFER_SIZE 1024
 
 typedef struct parserCDT *parserADT;
 
@@ -246,6 +246,8 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
         return -1; // Or handle the error appropriately
     }
 
+    fprintf(stdout, "after opening file\n");
+
     // sends initial response
     char initial[64];
     sprintf(initial, "+OK %zu octets\r\n", mail->octets);
@@ -254,11 +256,14 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
     char buffer[BUFFER_SIZE];
     size_t bytesRead;
 
-    while ((bytesRead = fread(buffer, 25, sizeof(buffer), file)) > 0)
+    log_message(conn->logger, INFO, ARGPARSER, "Before while loop");
+    while ((bytesRead = fread(buffer, 1, sizeof(buffer), file)) > 0)
     {
-        fprintf(stdout, "Bytes read %zu\n\n Buffer: %s\n\n", bytesRead, buffer);
+        log_message(conn->logger, INFO, ARGPARSER, "Inside while loop");
+        // log_message(conn->logger, INFO, ARGPARSER, buffer);
+        fprintf(stdout, "MAIL INFOOOOO");
+        // fprintf(stdout, "Bytes read %zu\n\n Buffer: %s\n\n", bytesRead, buffer);
         send_data(buffer, dataSendingBuffer, conn);
-        // fwrite(buffer, 1, bytesRead, dataSendingBuffer->write);
 
         // Check if the dataSendingBuffer is full and send it
         if (dataSendingBuffer->write - dataSendingBuffer->read > BUFFER_SIZE - 1024)
@@ -328,6 +333,7 @@ int quit_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
     // set connection status as update
     conn->status = UPDATE;
 
+    //
     close(conn->fd);
 
     return 1;

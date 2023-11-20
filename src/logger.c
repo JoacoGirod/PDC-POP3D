@@ -30,6 +30,8 @@ void create_logs_folder()
 // Function to initialize the logger
 Logger *initialize_logger(const char *logFileName)
 {
+    // struct GlobalConfiguration *gConf = get_global_configuration();
+
     if (numInitializedLoggers >= MAX_LOGGERS)
     {
         fprintf(stderr, "Cannot initialize more loggers. Maximum limit reached.\n");
@@ -49,6 +51,7 @@ Logger *initialize_logger(const char *logFileName)
 
     // Create the full path to the log file
     char fullLogFileName[256]; // Adjust the size as needed
+
     snprintf(fullLogFileName, sizeof(fullLogFileName), "%s/%s", LOG_FOLDER, logFileName);
 
     logger->logFileName = my_strdup(fullLogFileName);

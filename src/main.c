@@ -25,6 +25,19 @@
 #include "server_utils.h"
 #include "global_config.h"
 
+static void log_global_configuration(Logger *mainLogger)
+{
+    struct GlobalConfiguration *global_config_instance = get_global_configuration();
+    log_message(mainLogger, INFO, SETUP, "<<INITIAL SERVER CONFIGURATION>>");
+    log_message(mainLogger, INFO, SETUP, "POP3 Address (TCP) : %s", global_config_instance->pop3_addr);
+    log_message(mainLogger, INFO, SETUP, "POP3 Port (TCP) : %d", global_config_instance->pop3_port);
+    log_message(mainLogger, INFO, SETUP, "Configuration Service Address (UDP) : %s", global_config_instance->conf_addr);
+    log_message(mainLogger, INFO, SETUP, "Configuration Service Port (UDP) : %d", global_config_instance->conf_port);
+    log_message(mainLogger, INFO, SETUP, "Users Registered (%d):", global_config_instance->numUsers);
+    for (int i = 0; i < 10; i++)
+        log_message(mainLogger, INFO, SETUP, "%s", global_config_instance->users[i].name);
+}
+
 // Creates Servers
 int main(const int argc, char **argv)
 {
@@ -32,9 +45,11 @@ int main(const int argc, char **argv)
 
     parse_args(argc, argv, mainLogger); // Function automatically sets the Global Configuration
 
-    log_global_configuration(mainLogger);
-
     struct GlobalConfiguration *gConf = get_global_configuration();
+    gConf->buffers_size = INITIAL_BUFFER_SIZE;
+    gConf->logs_folder = "logs";
+
+    log_global_configuration(mainLogger);
 
     const char *err_msg;
 

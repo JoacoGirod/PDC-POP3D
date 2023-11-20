@@ -4,11 +4,11 @@
 #define GLOBAL_CONFIG_H
 
 #include <stddef.h>
-#include "logger.h"
 #define MAX_PATH_LENGTH 256
 #define MAX_FILENAME_LENGTH 256
 #define MAX_EMAILS 64
 #define MAX_USERS 10
+#define INITIAL_BUFFER_SIZE 2048
 
 struct Users
 {
@@ -27,9 +27,11 @@ struct GlobalConfiguration
     size_t concurrent_clients;
     size_t total_clients;
     size_t bytes_transfered;
+    size_t buffers_size;
+    char *logs_folder;
+    char *maildir_folder;
 };
 
 struct GlobalConfiguration *get_global_configuration();
-void log_global_configuration(Logger *mainLogger);
 
 #endif // GLOBAL_CONFIG_H

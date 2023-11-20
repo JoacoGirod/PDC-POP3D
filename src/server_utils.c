@@ -11,19 +11,22 @@ void sigterm_handler(const int signal)
 void pop3_handle_connection(struct Connection *conn)
 {
     log_message(conn->logger, INFO, THREADMAINHANDLER, "Executing Main Thread Handler");
+    struct GlobalConfiguration *gConf = get_global_configuration();
+
+    log_message(conn->logger, INFO, THREADMAINHANDLER, "Using buffer size : %d", gConf->buffers_size);
 
     // Server Buffer Initialization
     struct buffer serverBuffer;
     buffer *pServerBuffer = &serverBuffer;
     // TODO verify this size is the correct, big mails case!
-    uint8_t serverDataBuffer[2048]; // This size should be subject to alteration through Configuration Server
+    uint8_t serverDataBuffer[gConf->buffers_size]; // This size should be subject to alteration through Configuration Server
     buffer_init(&serverBuffer, N(serverDataBuffer), serverDataBuffer);
 
     // Client Buffer Initialization
     struct buffer clientBuffer;
     buffer *pClientBuffer = &clientBuffer;
     // TODO verify this size is the correct
-    uint8_t clientDataBuffer[512]; // This size should be subject to alteration through Configuration Server
+    uint8_t clientDataBuffer[gConf->buffers_size]; // This size should be subject to alteration through Configuration Server
     buffer_init(&clientBuffer, N(clientDataBuffer), clientDataBuffer);
 
     // Initial Salute
@@ -50,7 +53,7 @@ void pop3_handle_connection(struct Connection *conn)
             bytesRead = recv(conn->fd, ptr, availableSpace, 0);
             totalBytesRead += bytesRead;
 
-            if (totalBytesRead > 255) // Max Length defined in RFC Extension
+            if (totalBytesRead > MAX_COMMAND_LENGTH)
             {
                 log_message(conn->logger, ERROR, THREADMAINHANDLER, "Received command exceeds the maximum allowed length");
                 error = true;
@@ -101,13 +104,12 @@ void pop3_handle_connection(struct Connection *conn)
     close(conn->fd);
 }
 
-// Function to send data
 // Function to send data, including support for multi-line responses
 void send_data(const char *data, buffer *pBuffer, struct Connection *conn /*, bool isMultiLine*/)
 {
     size_t dataLength = strlen(data);
 
-    if (dataLength > 255)
+    if (dataLength > 1024)
     {
         log_message(conn->logger, ERROR, THREADMAINHANDLER, "Data to be sent exceeds the maximum allowed length");
         // Handle the error, return, or exit as needed
@@ -145,6 +147,8 @@ void send_data(const char *data, buffer *pBuffer, struct Connection *conn /*, bo
 
     // Advance the write pointer in the buffer by the number of bytes written
     buffer_write_adv(pBuffer, dataLength);
+
+    log_message(conn->logger, INFO, THREADMAINHANDLER, "SENDING DATA");
 
     // Send the data to the client
     sock_blocking_write(conn->fd, pBuffer);
@@ -200,40 +204,81 @@ void handle_client_without_threading(int client, const struct sockaddr_in6 *cadd
     close(client);
 }
 
+// Function to send data to the client
+int send_data_udp(Logger *logger, const struct UDPClientInfo *client_info, uint8_t *data)
+{
+    log_message(logger, INFO, CONFIGTHREAD, "Responding client");
+    size_t size = strlen((char *)data);
+    int sent_bytes = sendto(client_info->udp_server, data, size, 0, (struct sockaddr *)client_info->client_addr, client_info->client_addr_len);
+    if (sent_bytes == -1)
+    {
+        log_message(logger, ERROR, CONFIGTHREAD, "Error sending data to client");
+    }
+
+    return sent_bytes;
+}
+
 // Attends and responds Configuration clients
 void *handle_configuration_requests(void *arg)
 {
     Logger *configurationLogger = initialize_logger("configurationServer.log");
     log_message(configurationLogger, INFO, CONFIGTHREAD, "Configuration Server is Running...");
 
+    struct GlobalConfiguration *gConf = get_global_configuration();
+
     int udp_server = *((int *)arg);
 
     struct sockaddr_in client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
 
-    char buffer[1024];
+    // Configuration Server Buffer Initialization
+    struct buffer configServerBuffer;
+    buffer *pConfigServerBuffer = &configServerBuffer;
+    uint8_t configServerDataBuffer[gConf->buffers_size];
+    buffer_init(&configServerBuffer, N(configServerDataBuffer), configServerDataBuffer);
     int received_bytes;
+    size_t availableSpace = 0;
+
+    // Create ClientInfo structure
+    struct UDPClientInfo client_info = {
+        .udp_server = udp_server,
+        .client_addr = &client_addr,
+        .client_addr_len = client_addr_len};
 
     while (1)
     {
+        uint8_t *ptr = buffer_write_ptr(pConfigServerBuffer, &availableSpace);
         // Receive data from the client
-        received_bytes = recvfrom(udp_server, buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &client_addr_len);
+        received_bytes = recvfrom(udp_server, ptr, availableSpace, 0, (struct sockaddr *)&client_addr, &client_addr_len);
+        log_message(configurationLogger, INFO, CONFIGTHREAD, "Client Request arrived");
+
         if (received_bytes == -1)
         {
             log_message(configurationLogger, ERROR, CONFIGTHREAD, "Error receiving data from client");
             break;
         }
+        else if (received_bytes > 255)
+        { // Invalid command
+            if (send_data_udp(configurationLogger, &client_info, ptr) == -1)
+            {
+                break;
+            }
+        }
 
         // Print received data
-        buffer[received_bytes] = '\0';
-        log_message(configurationLogger, INFO, CONFIGTHREAD, "Received message from client: %s", buffer);
+        configServerDataBuffer[received_bytes] = '\0';
+        buffer_write_adv(pConfigServerBuffer, received_bytes + 1);
 
+        // parse_config_command(ptr, &client_info, configServerDataBuffer); // USEN send_data_udp()!
+
+        // EJEMPLO DE USO DE SEND DATA
         // Echo the data back to the client
-        if (sendto(udp_server, buffer, received_bytes, 0, (struct sockaddr *)&client_addr, client_addr_len) == -1)
+        if (send_data_udp(configurationLogger, &client_info, configServerDataBuffer) == -1)
         {
-            log_message(configurationLogger, ERROR, CONFIGTHREAD, "Error sending data to client");
             break;
         }
+
+        buffer_reset(pConfigServerBuffer);
     }
 
     return NULL;

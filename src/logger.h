@@ -9,6 +9,7 @@
 #include <string.h>
 #include <time.h>
 #include <sys/stat.h>
+#include "global_config.h"
 #define MAX_LOGGERS 15
 
 typedef enum
