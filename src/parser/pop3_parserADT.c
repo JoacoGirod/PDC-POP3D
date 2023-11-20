@@ -131,13 +131,17 @@ int list_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
 int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
-    struct GlobalConfiguration *gConf = get_global_configuration();
-
+    Logger *logger = conn->logger;
     if (conn->status == AUTHORIZATION)
     {
         send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
+        log_message(logger, ERROR, COMMAND_HANDLER, " - Unknown command");
         return -1;
     }
+
+    log_message(logger, INFO, COMMAND_HANDLER, " - Retr action started");
+
+    struct GlobalConfiguration *gConf = get_global_configuration();
 
     // gets the email index and subtracts 1 because mails are numbered
     size_t mailIndex = atoi(argument) - 1;
@@ -146,6 +150,7 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
     {
         // invalid email index
         send_data("-ERR Invalid email index\r\n", dataSendingBuffer, conn);
+        log_message(logger, ERROR, COMMAND_HANDLER, " - User entered invalid email index");
         return 1;
     }
 
@@ -154,48 +159,39 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
     // constructs file path
     char filePath[MAX_FILE_PATH];
     snprintf(filePath, sizeof(filePath), "%s/%s/%s/%s", gConf->maildir_folder, conn->username, mail->folder, mail->filename);
-    fprintf(stdout, "\n\nFile path: %s\n\n", filePath);
 
     // Open the file for reading
     FILE *file = fopen(filePath, "r");
     if (file == NULL)
     {
-        perror("Error opening mail file");
-        return -1; // Or handle the error appropriately
+        log_message(logger, ERROR, COMMAND_HANDLER, " - Error opening mail file");
+        return -1;
     }
-
-    fprintf(stdout, "after opening file\n");
 
     // sends initial response
     char initial[64];
     sprintf(initial, "+OK %zu octets\r\n", mail->octets);
     send_data(initial, dataSendingBuffer, conn);
 
-    // TODO: transition to correct buffer
     char buffer[BUFFER_SIZE];
     size_t bytesRead;
 
-    log_message(conn->logger, INFO, ARGPARSER, "Before while loop");
-    while ((bytesRead = fread(buffer, 1, sizeof(buffer), file)) > 0)
+    log_message(logger, INFO, COMMAND_HANDLER, " - Printing mail data to client");
+    while ((bytesRead = fread(buffer, 1, sizeof(buffer) - 1, file)) > 0)
     {
-        // fprintf(stdout, buffer);
-        log_message(conn->logger, INFO, ARGPARSER, "Inside while loop");
-
+        buffer[bytesRead] = '\0';
         send_data(buffer, dataSendingBuffer, conn);
-
-        // TODO: clear buffer if mail is larger than 1024 bytes
-        if (bytesRead >= 1024)
-        {
-        }
+        memset(buffer, 0, sizeof(buffer));
     }
 
-    // sends any remaining data in the buffer
-    send_data("", dataSendingBuffer, conn);
+    log_message(logger, INFO, COMMAND_HANDLER, " - Mail data printed to client");
+
     // closes file
     fclose(file);
 
     // marks mail as RETRIEVED
     mail->status = RETRIEVED;
+    log_message(logger, INFO, COMMAND_HANDLER, " - Mail marked as RETRIEVED");
 
     send_data(".\r\n", dataSendingBuffer, conn);
 
@@ -205,9 +201,12 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 // sets specific Mail to state DELETED
 int dele_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
+    Logger *logger = conn->logger;
+    log_message(logger, INFO, COMMAND_HANDLER, " - Dele action started");
     if (conn->status == AUTHORIZATION)
     {
         send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
+        log_message(logger, ERROR, COMMAND_HANDLER, " - DELE command in AUTHORIZATION state forbidden");
         return -1;
     }
 
@@ -218,11 +217,13 @@ int dele_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
     {
         // invalid email index
         send_data("-ERR Invalid email index\r\n", dataSendingBuffer, conn);
-        return 1;
+        log_message(logger, ERROR, COMMAND_HANDLER, " - User entered invalid email index");
+        return -1;
     }
 
     // sets the mail status to DELETED
     conn->mails[mailIndex].status = DELETED;
+    log_message(logger, INFO, COMMAND_HANDLER, " - Mail marked as DELETED");
 
     send_data("+OK Marked to be deleted. \r\n", dataSendingBuffer, conn);
 
@@ -263,42 +264,59 @@ int rset_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
 int quit_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
-    send_data("+OK Logging out. \r\n", dataSendingBuffer, conn);
+    Logger *logger = conn->logger;
+    log_message(logger, INFO, COMMANDPARSER, " - Quit action started");
 
-    // if (conn->status == AUTHORIZATION)
-    // {
-    //     send_data("-ERR Unkown command. \r\n", dataSendingBuffer, conn);
-    //     return -1;
-    // }
-    // else
-    // {
-    //     fprintf(stdout, "INSIDE QUIT ACTION");
-    //     send_data(stdout, "inside quit else: conn status: %d", conn->status);
-    //     // set connection status as update
-    //     conn->status = UPDATE;
+    // Envía la respuesta al cliente
+    send_data("+OK POP3 server signing off. \r\n", dataSendingBuffer, conn);
 
-    //     // loops through each email and sets its status to UNCHANGED
-    //     for (size_t i = 0; i < conn->num_emails; ++i)
-    //     {
-    //         if (conn->mails[i].status == DELETED)
-    //         {
-    //             char filePath[MAX_FILE_PATH];
-    //             snprintf(filePath, sizeof(filePath), "%s/%s/%s/%s", BASE_DIR, conn->username, conn->mails[i].folder, conn->mails[i].filename);
-    //             delete_file(filePath);
-    //         }
-    //         else if (conn->mails[i].status == RETRIEVED)
-    //         {
-    //             fprintf(stdout, "MOVING FILE: %s", conn->mails[i].filename);
-    //             char userPath[MAX_FILE_PATH];
-    //             snprintf(userPath, sizeof(userPath), "%s/%s", BASE_DIR, conn->username);
-    //             char filePath[MAX_FILE_PATH];
-    //             snprintf(filePath, sizeof(filePath), "%s/%s/%s/%s", BASE_DIR, conn->username, conn->mails[i].folder, conn->mails[i].filename);
-    //             move_file(userPath, filePath);
-    //         }
-    //     }
-    // }
+    log_message(logger, INFO, CONNECTION, " - Closing connection");
 
-    close(conn->fd);
+    // Cierra la conexión si está en estado de AUTORIZACIÓN
+    if (conn->status == AUTHORIZATION)
+    {
+        if (close(conn->fd) == -1)
+        {
+            log_message(logger, ERROR, CONNECTION, " - Error closing connection (AUTHORIZATION state)");
+            return -1;
+        }
+        log_message(logger, INFO, CONNECTION, " - Connection closed (AUTHORIZATION state)");
+        return 1;
+    }
+
+    // Marca la conexión como en estado de ACTUALIZACIÓN
+    conn->status = UPDATE;
+    log_message(logger, INFO, CONNECTION, " - Connection transitioned to UPDATE state");
+
+    // Procesa cada correo electrónico
+    for (size_t i = 0; i < conn->num_emails; ++i)
+    {
+        if (conn->mails[i].status == DELETED)
+        {
+            char filePath[MAX_FILE_PATH];
+            snprintf(filePath, sizeof(filePath), "%s/%s/%s/%s", BASE_DIR, conn->username, conn->mails[i].folder, conn->mails[i].filename);
+            delete_file(filePath);
+        }
+        else if (conn->mails[i].status == RETRIEVED)
+        {
+            if (move_file_new_to_cur(BASE_DIR, conn->username, conn->mails[i].filename) == -1)
+            {
+                log_message(logger, ERROR, CONNECTION, " - Error moving file from new to cur");
+                return -1;
+            }
+        }
+        // Restablece el estado del correo a UNCHANGED
+        conn->mails[i].status = UNCHANGED;
+    }
+    log_message(logger, INFO, CONNECTION, " - All emails processed");
+
+    // Cierra la conexión
+    if (close(conn->fd) == -1)
+    {
+        log_message(logger, ERROR, CONNECTION, " - Error closing connection (UPDATE state)");
+        return -1;
+    }
+    log_message(logger, INFO, CONNECTION, " - Connection closed (UPDATE state)");
 
     return 1;
 }
@@ -332,7 +350,7 @@ struct command
     bool (*accept_arguments)(const char *arg); // function to accept arguments or not
     command_action action;                     // action to execute
 };
-struct command commands[] = {
+static struct command commands[] = {
     {.name = "USER",
      .accept_arguments = has_argument,
      .action = user_action},
@@ -408,7 +426,7 @@ int parse_input(const uint8_t *input, struct Connection *conn, struct buffer *da
 
     // send_data("Esto le reponde al usuario", dataSendingBuffer, conn);
 
-    log_message(conn->logger, INFO, COMMANDPARSER, "Parsing input: %s", input);
+    log_message(conn->logger, INFO, COMMANDPARSER, " - Parsing input: %s", input);
     extern const parser_automaton pop3_parser_automaton;
 
     parserADT pop3_parser = parser_init(&pop3_parser_automaton);
@@ -423,12 +441,12 @@ int parse_input(const uint8_t *input, struct Connection *conn, struct buffer *da
 
         if (result == PARSER_FINISHED)
         {
-            printf("Parser finished successfully.\n");
+            log_message(conn->logger, INFO, COMMANDPARSER, " - Parser finished");
             break;
         }
         else if (result == PARSER_ERROR)
         {
-            printf("Parser encountered an error.\n");
+            log_message(conn->logger, ERROR, COMMANDPARSER, " - Parser error");
             break;
         }
     }
@@ -442,21 +460,24 @@ int parse_input(const uint8_t *input, struct Connection *conn, struct buffer *da
     if (command == ERROR_COMMAND)
     {
         send_data("-ERR Unknown command\r\n", dataSendingBuffer, conn);
+        log_message(conn->logger, ERROR, COMMANDPARSER, " - Unknown command");
     }
     if (!commands[command].accept_arguments(arg_buffer))
     {
         send_data("-ERR Bad argument\r\n", dataSendingBuffer, conn);
+        log_message(conn->logger, ERROR, COMMANDPARSER, " - Bad argument");
     }
     else
     {
         int commandRet = commands[command].action(conn, dataSendingBuffer, arg_buffer);
         if (commandRet == -1)
         {
-            printf("Error executing command\n");
+            log_message(conn->logger, ERROR, COMMANDPARSER, " - Error executing command");
         }
     }
 
     parser_destroy(pop3_parser);
+    log_message(conn->logger, INFO, COMMANDPARSER, " - Parser destroyed");
 
     return 0;
 }

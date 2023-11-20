@@ -1,4 +1,3 @@
-
 #ifndef __PARSER_AUTOMATON_H__
 #define __PARSER_AUTOMATON_H__
 
