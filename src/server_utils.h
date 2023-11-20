@@ -59,6 +59,7 @@ struct UDPClientInfo
     int udp_server;
     struct sockaddr_in *client_addr;
     socklen_t client_addr_len;
+    Logger *logger;
 };
 
 /**

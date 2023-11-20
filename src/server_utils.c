@@ -204,16 +204,48 @@ void handle_client_without_threading(int client, const struct sockaddr_in6 *cadd
     close(client);
 }
 
-// Function to send data to the client
-int send_data_udp(Logger *logger, const struct UDPClientInfo *client_info, uint8_t *data)
+// Function to send data to the client, managing buffer advancement and resetting
+int send_data_udp(Logger *logger, const struct UDPClientInfo *client_info, buffer *pBuffer, char *data)
 {
     log_message(logger, INFO, CONFIGTHREAD, "Responding client");
-    size_t size = strlen((char *)data);
-    int sent_bytes = sendto(client_info->udp_server, data, size, 0, (struct sockaddr *)client_info->client_addr, client_info->client_addr_len);
+
+    size_t dataLength = strlen(data);
+
+    if (dataLength > 255)
+    {
+        log_message(logger, ERROR, CONFIGTHREAD, "Data to be sent exceeds the maximum allowed length");
+        // Handle the error, return, or exit as needed
+        return -1;
+    }
+
+    size_t availableSpace;
+    uint8_t *basePointer = buffer_write_ptr(pBuffer, &availableSpace);
+
+    if (dataLength > availableSpace)
+    {
+        log_message(logger, ERROR, CONFIGTHREAD, "Insufficient space in the buffer to write data");
+        // Handle the error, return, or exit as needed
+        return -1;
+    }
+
+    // Copy the data to the buffer
+    memcpy(basePointer, data, dataLength);
+
+    // Null-terminate the data to ensure it's a valid string
+    basePointer[dataLength] = '\0';
+
+    // Advance the write pointer in the buffer by the number of bytes written
+    buffer_write_adv(pBuffer, dataLength);
+
+    // Send the data to the client
+    int sent_bytes = sendto(client_info->udp_server, basePointer, dataLength, 0, (struct sockaddr *)client_info->client_addr, client_info->client_addr_len);
     if (sent_bytes == -1)
     {
         log_message(logger, ERROR, CONFIGTHREAD, "Error sending data to client");
     }
+
+    // Reset buffer pointers for reuse
+    buffer_reset(pBuffer);
 
     return sent_bytes;
 }
@@ -259,7 +291,7 @@ void *handle_configuration_requests(void *arg)
         }
         else if (received_bytes > 255)
         { // Invalid command
-            if (send_data_udp(configurationLogger, &client_info, ptr) == -1)
+            if (send_data_udp(configurationLogger, &client_info, pConfigServerBuffer, "Command is too big") == -1)
             {
                 break;
             }
@@ -268,17 +300,11 @@ void *handle_configuration_requests(void *arg)
         // Print received data
         configServerDataBuffer[received_bytes] = '\0';
         buffer_write_adv(pConfigServerBuffer, received_bytes + 1);
-
-        // parse_config_command(ptr, &client_info, configServerDataBuffer); // USEN send_data_udp()!
+        send_data_udp(configurationLogger, &client_info, pConfigServerBuffer, "Parsing gay");
+        // parse_config_command(logger, &client_info, pConfigServerBuffer,); // USEN send_data_udp()!
 
         // EJEMPLO DE USO DE SEND DATA
-        // Echo the data back to the client
-        if (send_data_udp(configurationLogger, &client_info, configServerDataBuffer) == -1)
-        {
-            break;
-        }
-
-        buffer_reset(pConfigServerBuffer);
+        // Echo the data back to the client using the managed function
     }
 
     return NULL;

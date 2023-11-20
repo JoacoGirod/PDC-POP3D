@@ -26,14 +26,17 @@ struct GlobalConfiguration
     int conf_port;
     struct Users users[MAX_USERS];
     size_t numUsers;
-    size_t concurrent_clients;
-    size_t total_clients;
-    size_t bytes_transfered;
     size_t buffers_size;
     char *logs_folder;
     char *maildir_folder;
 };
 
+struct GlobalStatistics
+{
+    size_t concurrent_clients;
+    size_t total_clients;
+    size_t bytes_transfered;
+};
 struct GlobalConfiguration *get_global_configuration();
 
 #endif // GLOBAL_CONFIG_H
