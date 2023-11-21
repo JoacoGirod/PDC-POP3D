@@ -23,25 +23,6 @@ static void config_parser_reset(void *data);
 static void config_parser_destroy(void *data);
 
 // Parser condition functions
-static bool is_alphanumeric(uint8_t c)
-{
-    return isalnum(c);
-}
-
-static bool is_space(uint8_t c)
-{
-    return isspace(c);
-}
-
-static bool is_letter(uint8_t c)
-{
-    return isalpha(c);
-}
-
-static bool is_any(uint8_t c)
-{
-    return true;
-}
 
 void get_config_token(parserADT p, char *buff, int max)
 {

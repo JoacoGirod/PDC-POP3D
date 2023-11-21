@@ -5,7 +5,7 @@
 #include <ctype.h>
 #include <stdio.h>
 #include "config_parserADT.h"
-#include "./parser_automaton/config_parser_automaton.h"
+#include "config_parser_automaton.h"
 
 // Define the valid object codes for SET and GET
 #define SET_AND_GET_OBJECT_CODES "BUF", "LGF", "MDF", "ATT"

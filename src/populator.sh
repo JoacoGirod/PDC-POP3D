@@ -13,18 +13,25 @@ create_maildir_structure() {
     done
 
     # Sample emails
-    local email_content1="Return-Path: <joaquin@foo.pdc>\n
-                            X-Original-To: joaquin@foo.pdc\n
-                            Delivered-To: joaquin@foo.pdc\n
-                            Received: from jgirod (localhost [127.0.0.1])\n
-                                by jgirod.foo.pdc (Postfix) with ESMTP id 1B6D917F014\n
-                                for <joaquin@foo.pdc>; Thu, 31 Aug 2023 11:19:47 -0300 (-03)\n
-                            subject: felicidad\n
-                            Message-Id: <20230831141950.1B6D917F014@jgirod.foo.pdc>\n
-                            Date: Thu, 31 Aug 2023 11:19:47 -0300 (-03)\n
-                            From: joaquin@foo.pdc\n\n
-                            from jose@gmail.com\n
-                            dfsasd\n"
+    local email_content1="Return-Path: <joaquin@foo.pdc>\r\n
+                            X-Original-To: joaquin@foo.pdc\r\n
+                            Delivered-To: joaquin@foo.pdc\r\n
+                            Received: from jgirod (localhost [127.0.0.1])\r\n
+                                by jgirod.foo.pdc (Postfix) with ESMTP id 1B6D917F014\r\n
+                                for <joaquin@foo.pdc>; Thu, 31 Aug 2023 11:19:47 -0300 (-03)\r\n
+                            subject: felicidad\r\n
+                            Message-Id: <20230831141950.1B6D917F014@jgirod.foo.pdc>\r\n
+                            Date: Thu, 31 Aug 2023 11:19:47 -0300 (-03)\r\n
+                            From: joaquin@foo.pdc\r\n
+                            from jose@gmail.com\r\n
+                            dfsasd\r\n
+                            .\r\n
+                            Hola parte 2....\r\n
+                            \r\n.\r\n
+                            .Hola parte 3.\r\n
+                            .\r\n
+                            HOAL COMO ESTAS TODO BIEN?\r\n"
+                            
     local email_content2="Return-Path: <joaquin@foo.pdc>\n
                         X-Original-To: joaquin@foo.pdc\n
                         Delivered-To: joaquin@foo.pdc\n
