@@ -1,27 +1,6 @@
-#include <ctype.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
-#include <stdio.h>
 
 #include "parserADT.h"
 #include "pop3_parser_automaton.h"
-
-#define ASCII_a 0x61
-#define ASCII_z 0x7A
-#define ASCII_PRINTABLE_MIN 0x21
-#define ASCII_PRINTABLE_MAX 0x7E
-#define ASCII_SPACE 0x20
-#define ASCII_CR 0x0D
-#define ASCII_LF 0X0A
-
-// Condiciones
-static bool is_letter(uint8_t c);
-static bool is_printable(uint8_t c);
-static bool is_space(uint8_t c);
-static bool is_cr(uint8_t c);
-static bool is_lf(uint8_t c);
-static bool is_any(uint8_t c);
 
 // Acciones
 static parser_state cmd_action(void *data, uint8_t c);
@@ -143,33 +122,6 @@ void get_pop3_arg(parserADT p, char *buff, int max)
     pop3_parser_data *d = (pop3_parser_data *)p->data;
     strncpy(buff, d->arg, max - 1);
     buff[max - 1] = '\0';
-}
-
-// Condiciones
-static bool is_letter(uint8_t c)
-{
-    c = tolower(c);
-    return c >= ASCII_a && c <= ASCII_z;
-}
-static bool is_printable(uint8_t c)
-{
-    return c >= ASCII_PRINTABLE_MIN && c <= ASCII_PRINTABLE_MAX;
-}
-static bool is_space(uint8_t c)
-{
-    return c == ASCII_SPACE;
-}
-static bool is_cr(uint8_t c)
-{
-    return c == ASCII_CR;
-}
-static bool is_lf(uint8_t c)
-{
-    return c == ASCII_LF;
-}
-static bool is_any(uint8_t c)
-{
-    return true;
 }
 
 // Acciones

@@ -198,7 +198,7 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
     struct Mail *mail = &conn->mails[mailIndex];
 
-    // constructs file path
+    // constructs file path for the email to open
     char filePath[MAX_FILE_PATH];
     snprintf(filePath, sizeof(filePath), "%s/%s/%s/%s", gConf->maildir_folder, conn->username, mail->folder, mail->filename);
 
@@ -215,15 +215,22 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
     size_t initialLength = sprintf(initial, "+OK %zu octets\r\n", mail->octets);
     send_n_data(initial, initialLength, dataSendingBuffer, conn);
 
-    char buffer[BUFFER_SIZE];
-    size_t bytesRead;
-
     log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Printing mail data to client");
-    while ((bytesRead = fread(buffer, 1, sizeof(buffer) - 1, file)) > 0)
+
+    // reads the file and sends it to the client
+    char buffer[BUFFER_SIZE];
+    while (fgets(buffer, sizeof(buffer), file) != NULL)
     {
-        buffer[bytesRead] = '\0';
+        size_t bytesRead = strlen(buffer);
+        // if the last character is a newline, replace it with \r\n
+        if (buffer[bytesRead - 1] == '\n')
+        {
+            buffer[bytesRead - 1] = '\r';
+            buffer[bytesRead] = '\n';
+            buffer[bytesRead + 1] = '\0';
+            bytesRead++;
+        }
         send_n_data(buffer, bytesRead, dataSendingBuffer, conn);
-        memset(buffer, 0, sizeof(buffer));
     }
 
     log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Mail data printed to client");
@@ -350,10 +357,14 @@ int quit_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
         }
         else if (conn->mails[i].status == RETRIEVED)
         {
-            if (move_file_new_to_cur(BASE_DIR, conn->username, conn->mails[i].filename) == -1)
+            // se fija que no este en cur
+            if (!conn->mails[i].folder[0] == 'c')
             {
-                log_message(logger, ERROR, CONNECTION, " - QUIT: Error moving file from new to cur");
-                return -1;
+                if (move_file_new_to_cur(BASE_DIR, conn->username, conn->mails[i].filename) == -1)
+                {
+                    log_message(logger, ERROR, CONNECTION, " - QUIT: Error moving file from new to cur");
+                    return -1;
+                }
             }
         }
         // Restablece el estado del correo a UNCHANGED
@@ -516,12 +527,12 @@ int parse_input(const uint8_t *input, struct Connection *conn, struct buffer *da
     pop3_command command = get_command(cmd_buffer);
     if (command == ERROR_COMMAND)
     {
-        send_data("-ERR Unknown command\r\n", dataSendingBuffer, conn);
+        send_data(ERR_UNKNOWN_COMMAND_RESPONSE, dataSendingBuffer, conn);
         log_message(conn->logger, ERROR, COMMANDPARSER, " - Unknown command");
     }
     if (!commands[command].accept_arguments(arg_buffer))
     {
-        send_data("-ERR Bad argument\r\n", dataSendingBuffer, conn);
+        send_data(ERR_BAD_ARGUMENT_RESPONSE, dataSendingBuffer, conn);
         log_message(conn->logger, ERROR, COMMANDPARSER, " - Bad argument");
     }
     else

@@ -109,7 +109,7 @@ void send_data(const char *data, buffer *p_buffer, struct Connection *conn /*, b
 {
     size_t data_length = strlen(data);
 
-    return send_n_data(data, data_length, p_buffer, conn);
+    send_n_data(data, data_length, p_buffer, conn);
 }
 
 void send_n_data(const char *data, size_t length, struct buffer *p_buffer, struct Connection *conn)

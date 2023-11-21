@@ -5,7 +5,7 @@
 #include <ctype.h>
 #include <stdio.h>
 #include "config_parserADT.h"
-#include "./parser_automaton/config_parser_automaton.h"
+#include "config_parser_automaton.h"
 
 // Define the valid object codes for SET and GET
 #define SET_AND_GET_OBJECT_CODES "BUF", "LGF", "MDF", "ATT"
@@ -14,56 +14,45 @@
 // --------------------------------------------- ACTIONS ---------------------------------------------
 int getbuf_action(char *argument)
 {
-    fprintf(stdout, "Buffer action\n");
 
     return 0;
 }
 int getlgf_action(char *argument)
 {
-    fprintf(stdout, "LGF action\n");
-
     return 0;
 }
 int getmdf_action(char *argument)
 {
-    fprintf(stdout, "MDF action\n");
 
     return 0;
 }
 int getatt_action(char *argument)
 {
-    fprintf(stdout, "ATT action\n");
 
     return 0;
 }
 int setbuf_action(char *argument)
 {
-    fprintf(stdout, "Buffer action\n");
 
     return 0;
 }
 int setlgf_action(char *argument)
 {
-    fprintf(stdout, "LGF action\n");
 
     return 0;
 }
 int setmdf_action(char *argument)
 {
-    fprintf(stdout, "MDF action\n");
 
     return 0;
 }
 int setatt_action(char *argument)
 {
-    fprintf(stdout, "ATT action\n");
 
     return 0;
 }
 int gethtu_action(char *argument)
 {
-    fprintf(stdout, "HTU action\n");
-
     return 0;
 }
 int getccu_action(char *argument)

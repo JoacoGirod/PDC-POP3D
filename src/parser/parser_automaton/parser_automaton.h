@@ -1,12 +1,25 @@
 #ifndef __PARSER_AUTOMATON_H__
 #define __PARSER_AUTOMATON_H__
 
+#include <stdio.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+#include <stdlib.h>
+
+#include <ctype.h>
+#include <string.h>
+#include <errno.h>
 
 #define N(x) (sizeof(x) / sizeof((x)[0]))
 
+#define IS_LETTER(c) ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))
+#define IS_PRINTABLE(c) (c >= 0x20 && c <= 0x7E)
+#define IS_SPACE(c) (c == ' ' || c == '\t')
+#define IS_CR(c) (c == '\r')
+#define IS_LF(c) (c == '\n')
+#define IS_ANY(c) (true)
+#define IS_ALPHANUMERIC(c) (isalnum(c))
 typedef enum parser_state
 {
     PARSER_READING = 0,
@@ -21,6 +34,35 @@ typedef void *(*parser_automaton_init)(void);
 typedef void *(*parser_automaton_copy)(void *data);
 typedef void (*parser_automaton_reset)(void *data);
 typedef void (*parser_automaton_destroy)(void *data);
+
+inline static bool is_letter(uint8_t c)
+{
+    return IS_LETTER(c);
+}
+inline static bool is_printable(uint8_t c)
+{
+    return IS_PRINTABLE(c);
+}
+inline static bool is_space(uint8_t c)
+{
+    return IS_SPACE(c);
+}
+inline static bool is_cr(uint8_t c)
+{
+    return IS_CR(c);
+}
+inline static bool is_lf(uint8_t c)
+{
+    return IS_LF(c);
+}
+inline static bool is_any(uint8_t c)
+{
+    return IS_ANY(c);
+}
+inline static bool is_alphanumeric(uint8_t c)
+{
+    return IS_ALPHANUMERIC(c);
+}
 
 /** describe una transición entre estados  */
 struct parser_state_transition
