@@ -8,6 +8,8 @@
 #include <server_utils.h>
 #include "parserADT.h"
 
-int config_parse_input(const uint8_t *input, struct buffer *dataSendingBuffer);
+typedef struct UDPClientInfo *pUDPClientInfo;
+
+int config_parse_input(Logger *logger, const pUDPClientInfo client_info, buffer *p_buffer, uint8_t *input);
 
 #endif

@@ -4,6 +4,8 @@
 #define GLOBAL_CONFIG_H
 
 #include <stddef.h>
+#include <stdbool.h>
+
 #define MAX_PATH_LENGTH 256
 #define MAX_FILENAME_LENGTH 256
 #define MAX_EMAILS 64
@@ -31,6 +33,8 @@ struct GlobalConfiguration
     char *logs_folder;
     char *maildir_folder;
     char *authorization_token;
+    bool transformation;
+    char *transformation_bin_location;
 };
 
 struct GlobalStatistics
@@ -39,6 +43,8 @@ struct GlobalStatistics
     size_t total_clients;
     size_t bytes_transfered;
 };
+
 struct GlobalConfiguration *get_global_configuration();
+struct GlobalStatistics *get_global_statistics();
 
 #endif // GLOBAL_CONFIG_H

@@ -5,6 +5,8 @@
 // #include "parser_automaton.h"
 #include "logger.h"
 #include "pop3_parser_automaton.h"
+#include <stdlib.h>
+#include <sys/wait.h>
 // #include "server_utils.h"
 // #include "parserADT.h"
 

@@ -24,6 +24,7 @@
 #include "netutils.h"
 #include "parser_automaton.h"
 #include "pop3_parserADT.h"
+#include "config_parserADT.h"
 
 #define MAX_PATH_LENGTH 256
 #define MAX_FILENAME_LENGTH 256
@@ -62,6 +63,8 @@ struct UDPClientInfo
     Logger *logger;
 };
 
+// typedef struct UDPClientInfo *pUDPClientInfo;
+
 /**
  * Structure used to transport information from the distributor thread onto the client handler threads
  */
@@ -86,5 +89,6 @@ void handle_client_without_threading(int client, const struct sockaddr_in6 *cadd
 void *handle_connection_pthread(void *args);
 void pop3_handle_connection(struct Connection *conn);
 void sigterm_handler(const int signal);
+int send_data_udp(Logger *logger, const struct UDPClientInfo *client_info, buffer *p_buffer, char *data);
 
 #endif // SERVER_UTILS_H

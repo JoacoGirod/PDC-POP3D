@@ -174,6 +174,8 @@ int list_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
     Logger *logger = conn->logger;
+    struct GlobalConfiguration *g_conf = get_global_configuration();
+
     if (conn->status == AUTHORIZATION)
     {
         send_data(ERR_UNKNOWN_COMMAND_RESPONSE, dataSendingBuffer, conn);
@@ -183,8 +185,6 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
     log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Retr action started");
 
-    struct GlobalConfiguration *gConf = get_global_configuration();
-
     // gets the email index and subtracts 1 because mails are numbered
     size_t mailIndex = atoi(argument) - 1;
     // checks if the emailIndex is valid
@@ -192,7 +192,7 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
     {
         // invalid email index
         send_data(ERR_INVALID_EMAIL_INDEX_RESPONSE, dataSendingBuffer, conn);
-        log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: User entered invalid email index");
+        log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: User entered an invalid email index");
         return 1;
     }
 
@@ -200,49 +200,129 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
     // constructs file path for the email to open
     char filePath[MAX_FILE_PATH];
-    snprintf(filePath, sizeof(filePath), "%s/%s/%s/%s", gConf->maildir_folder, conn->username, mail->folder, mail->filename);
+    snprintf(filePath, sizeof(filePath), "%s/%s/%s/%s", g_conf->maildir_folder, conn->username, mail->folder, mail->filename);
 
-    // Open the file for reading
-    FILE *file = fopen(filePath, "r");
-    if (file == NULL)
+    if (g_conf->transformation)
     {
-        log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: Error opening mail file");
-        return -1;
-    }
-
-    // sends initial response
-    char initial[MAX_RESPONSE_LENGTH];
-    size_t initialLength = sprintf(initial, "+OK %zu octets\r\n", mail->octets);
-    send_n_data(initial, initialLength, dataSendingBuffer, conn);
-
-    log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Printing mail data to client");
-
-    // reads the file and sends it to the client
-    char buffer[BUFFER_SIZE];
-    while (fgets(buffer, sizeof(buffer), file) != NULL)
-    {
-        size_t bytesRead = strlen(buffer);
-        // if the last character is a newline, replace it with \r\n
-        if (buffer[bytesRead - 1] == '\n')
+        // Create pipes for communication between parent and child
+        int pipe_fd[2];
+        if (pipe(pipe_fd) == -1)
         {
-            buffer[bytesRead - 1] = '\r';
-            buffer[bytesRead] = '\n';
-            buffer[bytesRead + 1] = '\0';
-            bytesRead++;
+            log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: Error creating pipe");
+            return -1;
         }
-        send_n_data(buffer, bytesRead, dataSendingBuffer, conn);
+
+        // Fork the process
+        pid_t pid = fork();
+
+        if (pid == -1)
+        {
+            log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: Error forking process");
+            close(pipe_fd[0]);
+            close(pipe_fd[1]);
+            return -1;
+        }
+
+        if (pid > 0) // Parent process
+        {
+            close(pipe_fd[1]); // Close write end of the pipe
+
+            // sends initial response
+            char initial[MAX_RESPONSE_LENGTH];
+            size_t initialLength = sprintf(initial, "+OK %zu octets\r\n", mail->octets);
+            send_n_data(initial, initialLength, dataSendingBuffer, conn);
+
+            char buffer[BUFFER_SIZE];
+            size_t bytesRead;
+
+            log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Printing mail data to client");
+
+            // Read from the pipe and send to the client
+            while ((bytesRead = read(pipe_fd[0], buffer, sizeof(buffer))) > 0)
+            {
+                send_n_data(buffer, bytesRead, dataSendingBuffer, conn);
+            }
+
+            log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Mail data printed to client");
+
+            // marks mail as RETRIEVED
+            mail->status = RETRIEVED;
+            log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Mail marked as RETRIEVED");
+
+            send_data(DOT_RESPONSE, dataSendingBuffer, conn);
+
+            close(pipe_fd[0]); // Close read end of the pipe
+
+            // Wait for the child to finish
+            wait(NULL);
+        }
+        else // Child process
+        {
+            close(pipe_fd[0]); // Close read end of the pipe
+
+            // Redirect stdout to the write end of the pipe
+            dup2(pipe_fd[1], STDOUT_FILENO);
+            close(pipe_fd[1]); // Close write end of the pipe
+
+            // Execute the transformation program (in this case, /bin/cat)
+            // char *transformation_program = "/bin/cat";
+            char *transformation_program = g_conf->transformation_bin_location;
+            char *const paramList[] = {transformation_program, filePath, NULL};
+            if (execve(transformation_program, paramList, NULL) == -1)
+            {
+                log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: execvpe failed in child process");
+                exit(EXIT_FAILURE);
+            }
+
+            // The code below is unreachable if execve is successful
+            log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: Unreachable code in child process");
+            exit(EXIT_FAILURE);
+        }
     }
+    else
+    {
+        // Open the file for reading
+        FILE *file = fopen(filePath, "r");
+        if (file == NULL)
+        {
+            log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: Error opening mail file");
+            return -1;
+        }
 
-    log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Mail data printed to client");
+        // sends initial response
+        char initial[MAX_RESPONSE_LENGTH];
+        size_t initialLength = sprintf(initial, "+OK %zu octets\r\n", mail->octets);
+        send_n_data(initial, initialLength, dataSendingBuffer, conn);
 
-    // closes file
-    fclose(file);
+        log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Printing mail data to client");
 
-    // marks mail as RETRIEVED
-    mail->status = RETRIEVED;
-    log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Mail marked as RETRIEVED");
+        // reads the file and sends it to the client
+        char buffer[BUFFER_SIZE];
+        while (fgets(buffer, sizeof(buffer), file) != NULL)
+        {
+            size_t bytesRead = strlen(buffer);
+            // if the last character is a newline, replace it with \r\n
+            if (buffer[bytesRead - 1] == '\n')
+            {
+                buffer[bytesRead - 1] = '\r';
+                buffer[bytesRead] = '\n';
+                buffer[bytesRead + 1] = '\0';
+                bytesRead++;
+            }
+            send_n_data(buffer, bytesRead, dataSendingBuffer, conn);
+        }
 
-    send_data(DOT_RESPONSE, dataSendingBuffer, conn);
+        log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Mail data printed to client");
+
+        // closes file
+        fclose(file);
+
+        // marks mail as RETRIEVED
+        mail->status = RETRIEVED;
+        log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Mail marked as RETRIEVED");
+
+        send_data(DOT_RESPONSE, dataSendingBuffer, conn);
+    }
 
     log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Retr action finished");
     return 0;

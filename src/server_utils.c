@@ -250,6 +250,8 @@ int send_data_udp(Logger *logger, const struct UDPClientInfo *client_info, buffe
     return sent_bytes;
 }
 
+// se mantiene el buffer no se avanzando el pointer???
+
 // Attends and responds Configuration clients
 void *handle_configuration_requests(void *arg)
 {
@@ -263,11 +265,18 @@ void *handle_configuration_requests(void *arg)
     struct sockaddr_in client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
 
+    // Configuration Client Buffer Initialization
+    struct buffer config_client_buffer;
+    buffer *p_config_client_buffer = &config_client_buffer;
+    uint8_t config_client_data_buffer[g_conf->buffers_size];
+    buffer_init(&config_client_buffer, N(config_client_data_buffer), config_client_data_buffer);
+
     // Configuration Server Buffer Initialization
     struct buffer config_server_buffer;
     buffer *p_config_server_buffer = &config_server_buffer;
     uint8_t config_server_data_buffer[g_conf->buffers_size];
     buffer_init(&config_server_buffer, N(config_server_data_buffer), config_server_data_buffer);
+
     int received_bytes;
     size_t available_space = 0;
 
@@ -279,7 +288,8 @@ void *handle_configuration_requests(void *arg)
 
     while (1)
     {
-        uint8_t *ptr = buffer_write_ptr(p_config_server_buffer, &available_space);
+        uint8_t *ptr = buffer_write_ptr(p_config_client_buffer, &available_space);
+
         // Receive data from the client
         received_bytes = recvfrom(udp_server, ptr, available_space, 0, (struct sockaddr *)&client_addr, &client_addr_len);
         log_message(configuration_logger, INFO, CONFIGTHREAD, "Client Request arrived");
@@ -291,16 +301,23 @@ void *handle_configuration_requests(void *arg)
         }
         else if (received_bytes > 255)
         { // Invalid command
-            if (send_data_udp(configuration_logger, &client_info, p_config_server_buffer, "Command is too big") == -1)
+            if (send_data_udp(configuration_logger, &client_info, p_config_client_buffer, "Command is too big") == -1)
             {
                 break;
             }
         }
 
-        // Print received data
-        config_server_data_buffer[received_bytes] = '\0';
-        buffer_write_adv(p_config_server_buffer, received_bytes + 1);
-        send_data_udp(configuration_logger, &client_info, p_config_server_buffer, "Parsing gay");
+        config_client_data_buffer[received_bytes] = '\0';
+        buffer_write_adv(p_config_client_buffer, received_bytes + 1);
+        log_message(configuration_logger, DEBUG, CONFIGTHREAD, "BUFFER WRITE PTR %p", ptr);
+
+        log_message(configuration_logger, INFO, CONFIGTHREAD, "Received Command %s", config_client_data_buffer);
+
+        send_data_udp(configuration_logger, &client_info, p_config_server_buffer, (char *)config_client_data_buffer);
+
+        config_parse_input(configuration_logger, &client_info, p_config_server_buffer, config_client_data_buffer);
+
+        buffer_reset(p_config_client_buffer);
         // parse_config_command(logger, &client_info, pConfigServerBuffer,); // USEN send_data_udp()!
 
         // EJEMPLO DE USO DE SEND DATA
