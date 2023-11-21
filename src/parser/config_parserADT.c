@@ -267,8 +267,11 @@ config_command get_config_command(const char *command)
     return ERROR_COMMAND;
 }
 
-int config_parse_input(const uint8_t *input, struct buffer *dataSendingBuffer)
+int config_parse_input(Logger *logger, const pUDPClientInfo client_info, buffer *p_buffer, uint8_t *input)
 {
+    send_data_udp(logger, client_info, p_buffer, "FELIX: inside config parse input ------- ");
+    send_data_udp(logger, client_info, p_buffer, (char *)input);
+    send_data_udp(logger, client_info, p_buffer, " -------");
     extern const parser_automaton config_parser_automaton;
     parserADT config_parser = parser_init(&config_parser_automaton);
 
@@ -278,15 +281,18 @@ int config_parse_input(const uint8_t *input, struct buffer *dataSendingBuffer)
     // Feed each character to the parser
     for (size_t i = 0; i < input_length; i++)
     {
+        send_data_udp(logger, client_info, p_buffer, "FELIX: ABOUT TO PARSER FEED\n");
         parser_state result = parser_feed(config_parser, input[i]);
 
         if (result == PARSER_FINISHED)
         {
+            send_data_udp(logger, client_info, p_buffer, "FELIX: parser success\n");
             printf("Parser finished successfully.\n");
             break;
         }
         else if (result == PARSER_ERROR)
         {
+            send_data_udp(logger, client_info, p_buffer, "FELIX: parser error\n");
             printf("Parser encountered an error.\n");
             break;
         }
@@ -302,19 +308,34 @@ int config_parse_input(const uint8_t *input, struct buffer *dataSendingBuffer)
     get_config_object_code(config_parser, object_code_buffer, OBJECT_CODE_LENGTH + 1);
     get_config_argument(config_parser, arg_buffer, ARG_MAX_LENGTH + 1);
 
+    send_data_udp(logger, client_info, p_buffer, "\ntoken: ");
+    send_data_udp(logger, client_info, p_buffer, token_buffer);
+    send_data_udp(logger, client_info, p_buffer, "\n operation: ");
+    send_data_udp(logger, client_info, p_buffer, operation_buffer);
+    send_data_udp(logger, client_info, p_buffer, "\n object code: ");
+    send_data_udp(logger, client_info, p_buffer, object_code_buffer);
+    send_data_udp(logger, client_info, p_buffer, "\n arg: ");
+    send_data_udp(logger, client_info, p_buffer, arg_buffer);
+    send_data_udp(logger, client_info, p_buffer, "\n");
+
     // validate auth token:
     if (is_valid_token(token_buffer) && is_valid_get_set(operation_buffer, arg_buffer) && is_valid_object_code(object_code_buffer))
     {
+        send_data_udp(logger, client_info, p_buffer, "FELIX: validated token, get/set and OC\n");
         // concatenate operation and object code
         char command_buffer[OPERATION_LENGTH + OBJECT_CODE_LENGTH + 1];
         strcpy(command_buffer, operation_buffer);
         strcat(command_buffer, object_code_buffer);
 
+        send_data_udp(logger, client_info, p_buffer, "FELIX: concat command: ");
+        send_data_udp(logger, client_info, p_buffer, command_buffer);
+        send_data_udp(logger, client_info, p_buffer, "\n\n");
+
         config_command command = get_config_command(command_buffer);
         int operationRet = config_commands[command].action(arg_buffer);
         if (operationRet == -1)
         {
-            fprintf(stdout, "Error executing command\n");
+            send_data_udp(logger, client_info, p_buffer, "Error executing command\n");
         }
     }
 
