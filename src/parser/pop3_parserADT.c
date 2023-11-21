@@ -171,19 +171,6 @@ int list_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
     return 0;
 }
 
-static int stuff_termination(char *buff, size_t buff_size, size_t *buff_len)
-{
-    if (*buff_len + 3 >= buff_size)
-    {
-        return -1;
-    }
-    buff[*buff_len] = '\r';
-    buff[*buff_len + 1] = '\n';
-    buff[*buff_len + 2] = '\0';
-    *buff_len += 2;
-    return 0;
-}
-
 int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
     Logger *logger = conn->logger;
@@ -250,15 +237,33 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
             log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Printing mail data to client");
 
-            // Read from the pipe and send to the client
+            // Read from the pipe and send to the client with byte stuffing
             while ((bytesRead = read(pipe_fd[0], buffer, sizeof(buffer))) > 0)
             {
-                if (stuff_termination(buffer, sizeof(buffer), &bytesRead) == -1)
+                // Check for lines starting with the termination octet
+                char *line = buffer;
+                char *nextLine;
+                while ((nextLine = strstr(line, "\r\n")) != NULL)
                 {
-                    log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: Error stuffing termination");
-                    return -1;
+                    nextLine += 2; // Move past the CRLF
+
+                    // Check if the line starts with the termination octet
+                    if (nextLine[0] == '.' && (nextLine[1] == '\r' || nextLine[1] == '\n' || nextLine[1] == '\0'))
+                    {
+                        // Byte-stuff the line
+                        memmove(nextLine + 1, nextLine, strlen(nextLine) + 1);
+                        nextLine[0] = '.';
+                    }
+
+                    // Send the modified line to the client
+                    send_n_data(line, nextLine - line, dataSendingBuffer, conn);
+
+                    // Move to the next line
+                    line = nextLine;
                 }
-                send_n_data(buffer, bytesRead, dataSendingBuffer, conn);
+
+                // Send the remaining data after byte stuffing
+                send_n_data(line, bytesRead - (line - buffer), dataSendingBuffer, conn);
             }
 
             log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Mail data printed to client");
@@ -316,16 +321,35 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
         // reads the file and sends it to the client
         char buffer[BUFFER_SIZE];
+
         while (fgets(buffer, sizeof(buffer), file) != NULL)
         {
+            // Check for lines ending with '\r\n.\r\n'
             size_t bytesRead = strlen(buffer);
-            // if the last character is a newline, replace it with \r\n
-            if (stuff_termination(buffer, sizeof(buffer), &bytesRead) == -1)
+            char *line = buffer;
+            char *nextLine;
+
+            while ((nextLine = strstr(line, "\r\n")) != NULL)
             {
-                log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: Error stuffing termination");
-                return -1;
+                nextLine += 2; // Move past the CRLF
+
+                // Check if the line ends with '\r\n.\r\n'
+                if (nextLine[0] == '.' && nextLine[1] == '\r' && nextLine[2] == '\n' && (nextLine[3] == '\r' || nextLine[3] == '\n' || nextLine[3] == '\0'))
+                {
+                    // Byte-stuff the line
+                    memmove(nextLine + 1, nextLine, strlen(nextLine) + 1);
+                    nextLine[0] = '.';
+                }
+
+                // Send the modified line to the client
+                send_n_data(line, nextLine - line, dataSendingBuffer, conn);
+
+                // Move to the next line
+                line = nextLine;
             }
-            send_n_data(buffer, bytesRead, dataSendingBuffer, conn);
+
+            // Send the remaining data after byte stuffing
+            send_n_data(line, bytesRead - (line - buffer), dataSendingBuffer, conn);
         }
 
         log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Mail data printed to client");
