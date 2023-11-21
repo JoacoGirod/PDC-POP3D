@@ -171,6 +171,19 @@ int list_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
     return 0;
 }
 
+static int stuff_termination(char *buff, size_t buff_size, size_t *buff_len)
+{
+    if (*buff_len + 3 >= buff_size)
+    {
+        return -1;
+    }
+    buff[*buff_len] = '\r';
+    buff[*buff_len + 1] = '\n';
+    buff[*buff_len + 2] = '\0';
+    *buff_len += 2;
+    return 0;
+}
+
 int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char *argument)
 {
     Logger *logger = conn->logger;
@@ -240,6 +253,11 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
             // Read from the pipe and send to the client
             while ((bytesRead = read(pipe_fd[0], buffer, sizeof(buffer))) > 0)
             {
+                if (stuff_termination(buffer, sizeof(buffer), &bytesRead) == -1)
+                {
+                    log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: Error stuffing termination");
+                    return -1;
+                }
                 send_n_data(buffer, bytesRead, dataSendingBuffer, conn);
             }
 
@@ -302,12 +320,10 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
         {
             size_t bytesRead = strlen(buffer);
             // if the last character is a newline, replace it with \r\n
-            if (buffer[bytesRead - 1] == '\n')
+            if (stuff_termination(buffer, sizeof(buffer), &bytesRead) == -1)
             {
-                buffer[bytesRead - 1] = '\r';
-                buffer[bytesRead] = '\n';
-                buffer[bytesRead + 1] = '\0';
-                bytesRead++;
+                log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: Error stuffing termination");
+                return -1;
             }
             send_n_data(buffer, bytesRead, dataSendingBuffer, conn);
         }
@@ -438,7 +454,7 @@ int quit_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
         else if (conn->mails[i].status == RETRIEVED)
         {
             // se fija que no este en cur
-            if (!conn->mails[i].folder[0] == 'c')
+            if (!(conn->mails[i].folder[0] == 'c'))
             {
                 if (move_file_new_to_cur(BASE_DIR, conn->username, conn->mails[i].filename) == -1)
                 {
