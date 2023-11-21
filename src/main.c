@@ -47,6 +47,8 @@ int main(const int argc, char **argv)
     g_conf->logs_folder = INITIAL_LOG_FOLDER_NAME;
     g_conf->maildir_folder = INITIAL_MAILDIRDIR_LOCATION;
     g_conf->authorization_token = INITIAL_AUTHORIZATION_TOKEN;
+    g_conf->transformation = true; // maybe false would be a better default and allow for change through the config server
+    g_conf->transformation_bin_location = "/bin/cat";
 
     Logger *main_logger = initialize_logger("mainLogs.log");
 
