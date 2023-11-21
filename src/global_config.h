@@ -14,7 +14,8 @@
 #define INITIAL_LOG_FOLDER_NAME "logs"
 #define INITIAL_MAILDIRDIR_LOCATION "/tmp/Maildir"
 #define INITIAL_AUTHORIZATION_TOKEN "adminadmin"
-
+#define MAX_FOLDERNAME_LENGTH 256
+#define AUTHTOKEN_LENGTH 10
 struct Users
 {
     char *name;
@@ -30,9 +31,9 @@ struct GlobalConfiguration
     struct Users users[MAX_USERS];
     size_t numUsers;
     size_t buffers_size;
-    char *logs_folder;
-    char *maildir_folder;
-    char *authorization_token;
+    char logs_folder[MAX_FILENAME_LENGTH];
+    char maildir_folder[MAX_FOLDERNAME_LENGTH];
+    char authorization_token[AUTHTOKEN_LENGTH];
     bool transformation;
     char *transformation_bin_location;
 };

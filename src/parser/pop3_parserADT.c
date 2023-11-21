@@ -200,7 +200,9 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
     // constructs file path
     char filePath[MAX_FILE_PATH];
-    snprintf(filePath, sizeof(filePath), "%s/%s/%s/%s", g_conf->maildir_folder, conn->username, mail->folder, mail->filename);
+    size_t buffer_size = sizeof(g_conf->maildir_folder) + sizeof(conn->username) + sizeof(mail->folder) + sizeof(mail->filename) + 3;
+
+    snprintf(filePath, buffer_size, "%s/%s/%s/%s", g_conf->maildir_folder, conn->username, mail->folder, mail->filename);
 
     if (g_conf->transformation)
     {
