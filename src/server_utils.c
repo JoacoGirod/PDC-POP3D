@@ -250,6 +250,8 @@ int send_data_udp(Logger *logger, const struct UDPClientInfo *client_info, buffe
     return sent_bytes;
 }
 
+// se mantiene el buffer no se avanzando el pointer???
+
 // Attends and responds Configuration clients
 void *handle_configuration_requests(void *arg)
 {
@@ -287,6 +289,7 @@ void *handle_configuration_requests(void *arg)
     while (1)
     {
         uint8_t *ptr = buffer_write_ptr(p_config_client_buffer, &available_space);
+
         // Receive data from the client
         received_bytes = recvfrom(udp_server, ptr, available_space, 0, (struct sockaddr *)&client_addr, &client_addr_len);
         log_message(configuration_logger, INFO, CONFIGTHREAD, "Client Request arrived");
@@ -304,9 +307,9 @@ void *handle_configuration_requests(void *arg)
             }
         }
 
-        // Print received data
-        config_client_data_buffer[received_bytes] = '\0'; // este se lo mando
+        config_client_data_buffer[received_bytes] = '\0';
         buffer_write_adv(p_config_client_buffer, received_bytes + 1);
+        log_message(configuration_logger, DEBUG, CONFIGTHREAD, "BUFFER WRITE PTR %p", ptr);
 
         log_message(configuration_logger, INFO, CONFIGTHREAD, "Received Command %s", config_client_data_buffer);
 
@@ -314,6 +317,7 @@ void *handle_configuration_requests(void *arg)
 
         config_parse_input(configuration_logger, &client_info, p_config_server_buffer, config_client_data_buffer);
 
+        buffer_reset(p_config_client_buffer);
         // parse_config_command(logger, &client_info, pConfigServerBuffer,); // USEN send_data_udp()!
 
         // EJEMPLO DE USO DE SEND DATA

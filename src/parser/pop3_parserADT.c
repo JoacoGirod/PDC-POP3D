@@ -274,7 +274,7 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
                 exit(EXIT_FAILURE);
             }
 
-            // The code below is unreachable if execvpe is successful
+            // The code below is unreachable if execve is successful
             log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: Unreachable code in child process");
             exit(EXIT_FAILURE);
         }

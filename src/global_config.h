@@ -43,6 +43,8 @@ struct GlobalStatistics
     size_t total_clients;
     size_t bytes_transfered;
 };
+
 struct GlobalConfiguration *get_global_configuration();
+struct GlobalStatistics *get_global_statistics();
 
 #endif // GLOBAL_CONFIG_H
