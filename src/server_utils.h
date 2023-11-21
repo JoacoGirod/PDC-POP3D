@@ -25,12 +25,16 @@
 #include "parser_automaton.h"
 #include "pop3_parserADT.h"
 #include "config_parserADT.h"
+#include "selector.h"
+#include "global_config.h"
 
 #define MAX_PATH_LENGTH 256
 #define MAX_FILENAME_LENGTH 256
 #define MAX_EMAILS 64
 #define MAX_USERNAME_LENGTH 255
 #define MAX_COMMAND_LENGTH 255 // Max Length defined in RFC Extension
+#define BUFFER_SIZE 1024
+
 enum ConnectionStatus
 {
     AUTHORIZATION,
@@ -78,6 +82,12 @@ struct Connection
     size_t num_emails;
     char username[MAX_USERNAME_LENGTH];
     enum ConnectionStatus status;
+    uint8_t read_buff[BUFFER_SIZE];
+    uint8_t write_buff[BUFFER_SIZE];
+    uint8_t file_buff[BUFFER_SIZE];
+    buffer info_file_buff;
+    buffer info_read_buff;
+    buffer info_write_buff;
 };
 
 void send_data(const char *data, buffer *pBuffer, struct Connection *conn);
@@ -90,5 +100,8 @@ void *handle_connection_pthread(void *args);
 void pop3_handle_connection(struct Connection *conn);
 void sigterm_handler(const int signal);
 int send_data_udp(Logger *logger, const struct UDPClientInfo *client_info, buffer *p_buffer, char *data);
-
+// non blocking stuff
+void pop3_passive_accept(struct selector_key *key);
+void pop3_write(struct selector_key *key);
+void pop3_read(struct selector_key *key);
 #endif // SERVER_UTILS_H

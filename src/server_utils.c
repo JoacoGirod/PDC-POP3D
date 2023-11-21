@@ -1,12 +1,5 @@
 #include "server_utils.h"
 
-static bool done = false;
-void sigterm_handler(const int signal)
-{
-    printf("\nSignal %d, cleaning up and exiting\n", signal); // make the main logger a global variable?
-    done = true;
-}
-
 // Main Thread Handling Function
 void pop3_handle_connection(struct Connection *conn)
 {
@@ -15,7 +8,7 @@ void pop3_handle_connection(struct Connection *conn)
 
     log_message(conn->logger, INFO, THREADMAINHANDLER, "Using buffer size : %d", g_conf->buffers_size);
 
-    // Server Buffer Initialization
+    // Server Buffer
     struct buffer serverBuffer;
     buffer *pServerBuffer = &serverBuffer;
     // TODO verify this size is the correct, big mails case!
@@ -250,8 +243,6 @@ int send_data_udp(Logger *logger, const struct UDPClientInfo *client_info, buffe
     return sent_bytes;
 }
 
-// se mantiene el buffer no se avanzando el pointer???
-
 // Attends and responds Configuration clients
 void *handle_configuration_requests(void *arg)
 {
@@ -342,7 +333,7 @@ void *serve_pop3_concurrent_blocking(void *server_ptr)
     Logger *distributor_thread_logger = initialize_logger(thread_log_file_name);
 
     log_message(distributor_thread_logger, INFO, DISTRIBUTORTHREAD, "Awaiting for connections...");
-    for (; !done;)
+    for (; 1;)
     {
         struct sockaddr_in6 caddr;
         socklen_t caddr_len = sizeof(caddr);
@@ -380,4 +371,206 @@ void *serve_pop3_concurrent_blocking(void *server_ptr)
         }
     }
     return NULL;
+}
+
+// -------------------
+// non blocking stuff
+// -------------------
+
+// Function to write data to a buffer
+void write_to_buffer(const char *data, buffer *p_buffer, struct Connection *conn)
+{
+    size_t data_length = strlen(data);
+
+    // Ensure that the buffer has enough space
+    size_t available_space;
+    uint8_t *base_pointer = buffer_write_ptr(p_buffer, &available_space);
+
+    // fprintf(stdout, "pointer %p\n", base_pointer);
+
+    if (data_length > available_space)
+    {
+        log_message(conn->logger, ERROR, THREADMAINHANDLER, "Insufficient space in the buffer to write data");
+        // Handle the error, return, or exit as needed
+        return;
+    }
+
+    // Copy the specified length of data to the buffer
+    memcpy(base_pointer, data, data_length);
+
+    // Null-terminate the data to ensure it's a valid string
+    base_pointer[data_length] = '\0';
+
+    // Advance the write pointer in the buffer by the number of bytes written
+    buffer_write_adv(p_buffer, data_length);
+
+    log_message(conn->logger, INFO, THREADMAINHANDLER, "Writing data to buffer");
+}
+
+static const struct fd_handler handler = {
+    .handle_read = pop3_read, // shold exist
+    .handle_write = pop3_write,
+    .handle_block = NULL,
+    .handle_close = NULL // should exist
+};
+
+void pop3_passive_accept(struct selector_key *key)
+{
+    struct sockaddr_in6 caddr;
+    socklen_t caddr_len = sizeof(caddr);
+    // Wait for a client to connect
+    const int client = accept(key->fd, (struct sockaddr *)&caddr, &caddr_len);
+
+    if (client == -1)
+    {
+        perror("Error creating active socket");
+    }
+
+    if (selector_fd_set_nio(client) == -1)
+    {
+        perror("Unable to set FD as non blocking");
+    }
+
+    struct Connection *c = calloc(1, sizeof(struct Connection));
+
+    if (c == NULL)
+    {
+        perror("Error allocating memory for Connection");
+        return;
+    }
+
+    c->fd = client;
+    c->addr_len = caddr_len;
+    buffer_init(&c->info_file_buff, BUFFER_SIZE, c->file_buff);
+    buffer_init(&c->info_read_buff, BUFFER_SIZE, c->read_buff);
+    buffer_init(&c->info_write_buff, BUFFER_SIZE, c->write_buff);
+    memcpy(&(c->addr), &caddr, caddr_len);
+
+    // crear buffers
+    // dejarlos en el connection
+    write_to_buffer("+OK POP3 server ready (^-^)\r\n", &c->info_write_buff, c);
+
+    if (selector_register(key->s, client, &handler, OP_WRITE, c) != SELECTOR_SUCCESS)
+    {
+        perror("Unable to register FD as non blocking");
+    }
+}
+
+void pop3_write(struct selector_key *key)
+{
+    printf("----> Write activated\n");
+
+    struct GlobalStatistics *g_stats = get_global_statistics();
+    struct Connection *conn = (struct Connection *)key->data;
+    size_t available_space = 0;
+    uint8_t *ptr = buffer_read_ptr(&conn->info_write_buff, &available_space);
+    ssize_t sent_count = send(key->fd, ptr, available_space, MSG_NOSIGNAL);
+
+    if (sent_count == -1)
+    {
+        return;
+    }
+    g_stats->bytes_transfered += sent_count;
+    buffer_read_adv(&conn->info_write_buff, sent_count);
+    if (buffer_can_read(&conn->info_write_buff))
+    {
+        selector_set_interest(key->s, key->fd, OP_WRITE);
+    }
+    selector_set_interest(key->s, key->fd, OP_READ);
+    if (selector_set_interest(key->s, key->fd, OP_READ) != SELECTOR_SUCCESS)
+    {
+        return;
+    }
+}
+
+void pop3_read(struct selector_key *key)
+{
+    // printf("----> Read activated\n");
+    struct Connection *conn = (struct Connection *)key->data;
+
+    // write_to_buffer("Fuck bitches get Money", &conn->info_write_buff, conn);
+
+    // Guardamos lo que leemos del socket en el buffer de entrada
+    // size_t available_space = 0;
+    // uint8_t *ptr = buffer_write_ptr(&conn->info_read_buff, &available_space);
+    // ssize_t bytes_read = recv(key->fd, ptr, available_space, 0);
+
+    bool error = false;
+    size_t availableSpace;
+    ssize_t bytesRead;
+    int totalBytesRead;
+
+    do
+    {
+
+        uint8_t *basePointer = buffer_write_ptr(&conn->info_read_buff, &availableSpace);
+        uint8_t *ptr = basePointer;
+        totalBytesRead = 0;
+
+        // Construct complete commands with the segmented data received through the TCP Stream
+        do
+        {
+            log_message(conn->logger, INFO, THREADMAINHANDLER, "Awaiting for Command");
+            bytesRead = recv(conn->fd, ptr, availableSpace, 0);
+            totalBytesRead += bytesRead;
+            ptr[bytesRead] = '\0';
+            printf("Read from socket '%s'\n", (char *)ptr);
+
+            if (totalBytesRead > MAX_COMMAND_LENGTH)
+            {
+                // log_message(conn->logger, ERROR, THREADMAINHANDLER, "Received command exceeds the maximum allowed length");
+                error = true;
+                break;
+            }
+
+            if (bytesRead > 0) // Some bytes read
+            {
+                ptr[bytesRead] = '\0'; // Null termination
+                // log_message(conn->logger, INFO, THREADMAINHANDLER, "Streamed by TCP: '%s'", ptr);
+                buffer_write_adv(&conn->info_read_buff, bytesRead);             // Advance buffer
+                ptr = buffer_write_ptr(&conn->info_read_buff, &availableSpace); // Update pointer
+
+                char *commandPtr = strstr((char *)basePointer, "\r\n");
+                while (commandPtr != NULL)
+                {
+                    *commandPtr = '\0'; // Null-terminate the command
+                                        // log_message(conn->logger, INFO, THREADMAINHANDLER, "Command sent to parser: '%s'", basePointer);
+
+                    // write_to_buffer((char *)basePointer, &conn->info_write_buff, conn);
+                    //  selector_set_interest(key->s, key->fd, OP_WRITE);
+                    printf("Passing to parser %s\n", basePointer);
+
+                    parse_input(basePointer, conn, &conn->info_write_buff);
+
+                    // Move to the next command (if any)
+                    basePointer = (uint8_t *)(commandPtr + 2);                      // Move beyond the "\r\n"
+                    ptr = buffer_write_ptr(&conn->info_read_buff, &availableSpace); // Update pointer
+
+                    // Check if there is another complete command in the remaining data
+                    commandPtr = strstr((char *)basePointer, "\r\n");
+                }
+            }
+            else if (bytesRead == 0) // Connection loss
+            {
+                // log_message(conn->logger, INFO, THREADMAINHANDLER, "Connection closed by the client");
+                break;
+            }
+            else // Function failed
+            {
+                // log_message(conn->logger, ERROR, THREADMAINHANDLER, "Function recv failed");
+                error = true;
+                break;
+            }
+        } while (!error); // Continue reading until a complete command is processed
+
+        write_to_buffer("Cambio y fuera\n", &conn->info_write_buff, conn);
+
+        if (selector_set_interest(key->s, key->fd, OP_WRITE) != SELECTOR_SUCCESS)
+        {
+            return;
+        }
+        // log_message(conn->logger, INFO, THREADMAINHANDLER, "Resetting client buffer");
+        buffer_reset(&conn->info_read_buff);
+
+    } while (!error && bytesRead > 0);
 }

@@ -24,6 +24,16 @@
 #include "args.h"
 #include "server_utils.h"
 #include "global_config.h"
+#include "selector.h"
+
+#define INITIAL_FDS 1024
+
+static bool done = false;
+void sigterm_handler(const int signal)
+{
+    printf("\nSignal %d, cleaning up and exiting\n", signal); // make the main logger a global variable?
+    done = true;
+}
 
 static void log_global_configuration(Logger *main_logger)
 {
@@ -41,6 +51,8 @@ static void log_global_configuration(Logger *main_logger)
 // Creates Servers
 int main(const int argc, char **argv)
 {
+    int ret = 0; // hopefully never changed
+
     struct GlobalConfiguration *g_conf = get_global_configuration();
 
     g_conf->buffers_size = INITIAL_BUFFER_SIZE;
@@ -57,6 +69,33 @@ int main(const int argc, char **argv)
     log_global_configuration(main_logger);
 
     const char *err_msg;
+
+    // SETTING UP SELECTORS
+
+    selector_status ss = SELECTOR_SUCCESS;
+    fd_selector selector = NULL;
+
+    const struct selector_init conf = {
+        .signal = SIGALRM, // para los trabajos no bloqueantes
+        .select_timeout = {
+            .tv_sec = 10,
+            .tv_nsec = 0,
+        },
+    };
+
+    // Guarda las configuraciones para el selector
+    if ((ss = selector_init(&conf)) != 0)
+    {
+        log_message(main_logger, ERROR, SETUP, "Configuring Server Address", "Cannot initialize selector: '%s'", ss == SELECTOR_IO ? strerror(errno) : selector_error(ss));
+        return 2;
+    }
+
+    selector = selector_new(INITIAL_FDS);
+    if (selector == NULL)
+    {
+        log_message(main_logger, ERROR, SETUP, "Unable to instantiate selector");
+        return 1;
+    }
 
     // ---------------------------------------------------------------------------
     // --------------------------- MAIN POP3 SERVER ------------------------------
@@ -183,72 +222,88 @@ int main(const int argc, char **argv)
 
     log_message(main_logger, INFO, SETUPCONF, "Configuration Server listening on UDP port %d", g_conf->conf_port);
 
+    // ---------------------------------------------------------------------------
+    // --------------------------- SIGNAL MANAGEMENT -----------------------------
+    // ---------------------------------------------------------------------------
+
     // Configuring Signal Handlers
     log_message(main_logger, INFO, SETUP, "Configuring Signal Handlers");
     signal(SIGTERM, sigterm_handler); // Registering SIGTERM helps tools like Valgrind
     signal(SIGINT, sigterm_handler);
 
-    // Creating a thread for handling UDP requests
-    pthread_t udp_thread;
-    if (pthread_create(&udp_thread, NULL, handle_configuration_requests, (void *)&conf_server) != 0)
+    // ---------------------------------------------------------------------------
+    // ------------------- MONITORED FD CONFIGURATION ----------------------------
+    // ---------------------------------------------------------------------------
+
+    if (selector_fd_set_nio(pop3_server) == -1)
     {
-        log_message(main_logger, ERROR, SETUPCONF, "Failed to create UDP thread");
+        err_msg = "Unable to set IPv4 socket as non-blocking";
         goto finally;
     }
 
-    pthread_t pop3_thread_4;
-    if (pthread_create(&pop3_thread_4, NULL, serve_pop3_concurrent_blocking, (void *)&pop3_server) != 0)
+    if (selector_fd_set_nio(pop3_server_6) == -1)
     {
-        log_message(main_logger, ERROR, SETUPCONF, "Failed to create POP3 IPV4 Thread");
+        err_msg = "Unable to set IPv6 socket as non-blocking";
         goto finally;
     }
 
-    pthread_t pop3_thread_6;
-    if (pthread_create(&pop3_thread_6, NULL, serve_pop3_concurrent_blocking, (void *)&pop3_server_6) != 0)
+    if (selector_fd_set_nio(conf_server) == -1)
     {
-        log_message(main_logger, ERROR, SETUPCONF, "Failed to create POP3 IPV6 Thread");
+        err_msg = "Unable to set IPv4 config socket as non-blocking";
         goto finally;
     }
 
-    // Wait for the completion of threads
-    void *thread_result_udp;
-    void *thread_result_pop3_4;
-    void *thread_result_pop3_6;
+    const struct fd_handler pop3_handler = {
+        .handle_read = pop3_passive_accept, // tcp passive socket
+        .handle_write = NULL,
+        .handle_close = NULL,
+    };
 
-    pthread_join(udp_thread, &thread_result_udp);
-    pthread_join(pop3_thread_4, &thread_result_pop3_4);
-    pthread_join(pop3_thread_6, &thread_result_pop3_6);
+    const struct fd_handler admin_handler = {
+        .handle_read = NULL, // should have something
+        .handle_write = NULL,
+        .handle_close = NULL};
 
-    // Set the return values to 0 by default
-    int ret_udp = 0;
-    int ret_pop3_4 = 0;
-    int ret_pop3_6 = 0;
-
-    // Check if any thread failed and update the corresponding return value
-    if (thread_result_udp != NULL)
+    // registramos los FD de los sockets al selector
+    ss = selector_register(selector, pop3_server, &pop3_handler, OP_READ, NULL);
+    if (ss != SELECTOR_SUCCESS)
     {
-        log_message(main_logger, ERROR, SETUP, "UDP thread failed");
-        ret_udp = 1;
+        err_msg = "Unable to register FD for POP3 IPv4 socket";
+        goto finally;
     }
 
-    if (thread_result_pop3_4 != NULL)
+    ss = selector_register(selector, pop3_server_6, &pop3_handler, OP_READ, NULL);
+    if (ss != SELECTOR_SUCCESS)
     {
-        log_message(main_logger, ERROR, SETUP, "POP3 IPV4 thread failed");
-        ret_pop3_4 = 1;
+        err_msg = "Unable to register FD for POP3 IPv6 socket";
+        goto finally;
     }
 
-    if (thread_result_pop3_6 != NULL)
+    ss = selector_register(selector, conf_server, &admin_handler, OP_READ, NULL);
+    if (ss != SELECTOR_SUCCESS)
     {
-        log_message(main_logger, ERROR, SETUP, "POP3 IPV6 thread failed");
-        ret_pop3_6 = 1;
+        err_msg = "Unable to register FD for Config IPv4 socket";
+        goto finally;
     }
 
-    // Calculate the sum of return values
-    int ret = ret_udp + ret_pop3_4 + ret_pop3_6;
+    // This is the event looper
+    for (; !done;)
+    {
+        err_msg = NULL;
+        ss = selector_select(selector);
+        if (ss != SELECTOR_SUCCESS)
+        {
+            // Something went wrong :o
+            err_msg = "An error occurred while selecting";
+            goto finally;
+        }
+    }
 
     err_msg = 0;
 
 finally:
+    selector_destroy(selector);
+    selector_close();
     if (err_msg)
     {
         log_message(main_logger, ERROR, SETUP, err_msg);

@@ -110,89 +110,89 @@ void free_all_loggers()
 // Log function
 void log_message(Logger *logger, LogLevel level, LogComponent component, const char *format, ...)
 {
-    if (logger == NULL || logger->logFileName == NULL)
-    {
-        fprintf(stderr, "Logger not properly initialized\n");
-        return;
-    }
+    // if (logger == NULL || logger->logFileName == NULL)
+    // {
+    //     fprintf(stderr, "Logger not properly initialized\n");
+    //     return;
+    // }
 
-    // Open the log file in append mode
-    FILE *logFile = fopen(logger->logFileName, "a");
+    // // Open the log file in append mode
+    // FILE *logFile = fopen(logger->logFileName, "a");
 
-    if (logFile == NULL)
-    {
-        perror("Error opening log file");
-        return;
-    }
+    // if (logFile == NULL)
+    // {
+    //     perror("Error opening log file");
+    //     return;
+    // }
 
-    // Get current time
-    time_t t;
-    struct tm *tm_info;
-    time(&t);
-    tm_info = localtime(&t);
+    // // Get current time
+    // time_t t;
+    // struct tm *tm_info;
+    // time(&t);
+    // tm_info = localtime(&t);
 
-    // Print timestamp
-    fprintf(logFile, "[%04d-%02d-%02d %02d:%02d:%02d] ",
-            tm_info->tm_year + 1900, tm_info->tm_mon + 1, tm_info->tm_mday,
-            tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec);
+    // // Print timestamp
+    // fprintf(logFile, "[%04d-%02d-%02d %02d:%02d:%02d] ",
+    //         tm_info->tm_year + 1900, tm_info->tm_mon + 1, tm_info->tm_mday,
+    //         tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec);
 
-    // Print log level
-    fprintf(logFile, "%s \t --- ", (level == INFO) ? "INFO" : "ERROR");
+    // // Print log level
+    // fprintf(logFile, "%s \t --- ", (level == INFO) ? "INFO" : "ERROR");
 
-    // Print log component
-    switch (component)
-    {
-    case COMMAND_HANDLER:
-        fprintf(logFile, "COMMAND HANDLER");
-        break;
-    case CONNECTION:
-        fprintf(logFile, "CONNECTION");
-        break;
-    case COMMANDPARSER:
-        fprintf(logFile, "COMMAND PARSER");
-        break;
-    case ARGPARSER:
-        fprintf(logFile, "ARGUMENTS PARSER");
-        break;
-    case THREAD:
-        fprintf(logFile, "THREAD");
-        break;
-    case CONFIGTHREAD:
-        fprintf(logFile, "CONFIGURATION THREAD");
-        break;
-    case THREADMAINHANDLER:
-        fprintf(logFile, "MAIN THREAD HANDLER");
-        break;
-    case SETUP:
-        fprintf(logFile, "SETUP");
-        break;
-    case SETUPPOP3:
-        fprintf(logFile, "SETUP POP3");
-        break;
-    case SETUPCONF:
-        fprintf(logFile, "SETUP CONF");
-        break;
-    case DISTRIBUTORTHREAD:
-        fprintf(logFile, "DISTRIBUTOR THREAD");
-        break;
-    case ITERATIVETHREAD:
-        fprintf(logFile, "DISTRIBUTOR THREAD");
-        break;
-    default:
-        fprintf(logFile, "UNKNOWN");
-    }
+    // // Print log component
+    // switch (component)
+    // {
+    // case COMMAND_HANDLER:
+    //     fprintf(logFile, "COMMAND HANDLER");
+    //     break;
+    // case CONNECTION:
+    //     fprintf(logFile, "CONNECTION");
+    //     break;
+    // case COMMANDPARSER:
+    //     fprintf(logFile, "COMMAND PARSER");
+    //     break;
+    // case ARGPARSER:
+    //     fprintf(logFile, "ARGUMENTS PARSER");
+    //     break;
+    // case THREAD:
+    //     fprintf(logFile, "THREAD");
+    //     break;
+    // case CONFIGTHREAD:
+    //     fprintf(logFile, "CONFIGURATION THREAD");
+    //     break;
+    // case THREADMAINHANDLER:
+    //     fprintf(logFile, "MAIN THREAD HANDLER");
+    //     break;
+    // case SETUP:
+    //     fprintf(logFile, "SETUP");
+    //     break;
+    // case SETUPPOP3:
+    //     fprintf(logFile, "SETUP POP3");
+    //     break;
+    // case SETUPCONF:
+    //     fprintf(logFile, "SETUP CONF");
+    //     break;
+    // case DISTRIBUTORTHREAD:
+    //     fprintf(logFile, "DISTRIBUTOR THREAD");
+    //     break;
+    // case ITERATIVETHREAD:
+    //     fprintf(logFile, "DISTRIBUTOR THREAD");
+    //     break;
+    // default:
+    //     fprintf(logFile, "UNKNOWN");
+    // }
 
-    fprintf(logFile, "\t --- ");
+    // fprintf(logFile, "\t --- ");
 
-    // Print log message
-    va_list args;
-    va_start(args, format);
-    vfprintf(logFile, format, args);
-    va_end(args);
+    // // Print log message
+    // va_list args;
+    // va_start(args, format);
+    // vfprintf(logFile, format, args);
+    // va_end(args);
 
-    // Print newline
-    fprintf(logFile, "\n");
+    // // Print newline
+    // fprintf(logFile, "\n");
 
-    // Close the log file
-    fclose(logFile);
+    // // Close the log file
+    // fclose(logFile);
 }
