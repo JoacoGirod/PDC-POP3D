@@ -158,19 +158,21 @@ static void config_parser_destroy(void *data)
     free(data);
 }
 
-// Define the transitions for each state
 static const struct parser_state_transition ST_TOKEN[] = {
-    {.when = is_alphanumeric, .dest = OPERATION, .action = token_action},
+    {.when = is_alphanumeric, .dest = TOKEN, .action = token_action},
+    {.when = is_space, .dest = OPERATION, .action = def_action},
     {.when = is_any, .dest = ERRST, .action = def_action},
 };
 
 static const struct parser_state_transition ST_OPERATION[] = {
-    {.when = is_letter, .dest = OBJECT_CODE, .action = operation_action},
+    {.when = is_letter, .dest = OPERATION, .action = operation_action},
+    {.when = is_space, .dest = OBJECT_CODE, .action = def_action},
     {.when = is_any, .dest = ERRST, .action = def_action},
 };
 
 static const struct parser_state_transition ST_OBJECT_CODE[] = {
-    {.when = is_letter, .dest = ARGUMENT, .action = object_code_action},
+    {.when = is_letter, .dest = OBJECT_CODE, .action = object_code_action},
+    {.when = is_space, .dest = ARGUMENT, .action = def_action},
     {.when = is_any, .dest = ERRST, .action = def_action},
 };
 

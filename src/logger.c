@@ -52,11 +52,12 @@ Logger *initialize_logger(const char *logFileName)
     }
 
     // Create the full path to the log file
-    char fullLogFileName[256]; // Adjust the size as needed
+    char full_log_file_name[512];                                               // Adjust the size as needed
+    size_t buffer_size = sizeof(g_conf->logs_folder) + sizeof(logFileName) + 2; // Add space for '/' and null terminator
 
-    snprintf(fullLogFileName, sizeof(fullLogFileName), "%s/%s", g_conf->logs_folder, logFileName);
+    snprintf(full_log_file_name, buffer_size, "%s/%s", g_conf->logs_folder, logFileName);
 
-    logger->logFileName = my_strdup(fullLogFileName);
+    logger->logFileName = my_strdup(full_log_file_name);
 
     if (logger->logFileName == NULL)
     {

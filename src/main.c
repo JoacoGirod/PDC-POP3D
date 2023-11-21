@@ -43,10 +43,11 @@ int main(const int argc, char **argv)
 {
     struct GlobalConfiguration *g_conf = get_global_configuration();
 
+    strcpy(g_conf->logs_folder, INITIAL_LOG_FOLDER_NAME);
     g_conf->buffers_size = INITIAL_BUFFER_SIZE;
-    g_conf->logs_folder = INITIAL_LOG_FOLDER_NAME;
-    g_conf->maildir_folder = INITIAL_MAILDIRDIR_LOCATION;
-    g_conf->authorization_token = INITIAL_AUTHORIZATION_TOKEN;
+    // g_conf->logs_folder = INITIAL_LOG_FOLDER_NAME;
+    strcpy(g_conf->maildir_folder, INITIAL_MAILDIRDIR_LOCATION);
+    strcpy(g_conf->authorization_token, INITIAL_AUTHORIZATION_TOKEN);
     g_conf->transformation = true; // maybe false would be a better default and allow for change through the config server
     g_conf->transformation_bin_location = "/bin/cat";
 

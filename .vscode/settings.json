@@ -13,12 +13,6 @@
     "stdio.h": "c",
     "PARAFELIX.C": "cpp",
     "pop3_functions.h": "c",
-    "parseradt.h": "c",
-    "random": "cpp",
-    "stdlib.h": "c",
-    "stddef.h": "c",
-    "ctype.h": "c",
-    "parser_automaton.h": "c",
-    "server_utils.h": "c"
+    "parseradt.h": "c"
   }
 }
