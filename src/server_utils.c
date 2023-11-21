@@ -109,7 +109,12 @@ void send_data(const char *data, buffer *p_buffer, struct Connection *conn /*, b
 {
     size_t data_length = strlen(data);
 
-    if (data_length > 1024)
+    send_n_data(data, data_length, p_buffer, conn);
+}
+
+void send_n_data(const char *data, size_t length, struct buffer *p_buffer, struct Connection *conn)
+{
+    if (length > 1024)
     {
         log_message(conn->logger, ERROR, THREADMAINHANDLER, "Data to be sent exceeds the maximum allowed length");
         // Handle the error, return, or exit as needed
@@ -119,34 +124,21 @@ void send_data(const char *data, buffer *p_buffer, struct Connection *conn /*, b
     size_t available_space;
     uint8_t *base_pointer = buffer_write_ptr(p_buffer, &available_space);
 
-    if (data_length > available_space)
+    if (length > available_space)
     {
         log_message(conn->logger, ERROR, THREADMAINHANDLER, "Insufficient space in the buffer to write data");
         // Handle the error, return, or exit as needed
         return;
     }
 
-    // Check if the data is part of a multi-line response
-    // if (isMultiLine)
-    // {
-    //     // Check if the first character of the data is the termination octet
-    //     if (data[0] == '.')
-    //     {
-    //         // Byte-stuff the data by pre-pending the termination octet
-    //         memmove(basePointer + 1, data, dataLength);
-    //         basePointer[0] = '.';
-    //         dataLength++;
-    //     }
-    // }
-
-    // Copy the data to the buffer
-    memcpy(base_pointer, data, data_length);
+    // Copy the specified length of data to the buffer
+    memcpy(base_pointer, data, length);
 
     // Null-terminate the data to ensure it's a valid string
-    base_pointer[data_length] = '\0';
+    base_pointer[length] = '\0';
 
     // Advance the write pointer in the buffer by the number of bytes written
-    buffer_write_adv(p_buffer, data_length);
+    buffer_write_adv(p_buffer, length);
 
     log_message(conn->logger, INFO, THREADMAINHANDLER, "SENDING DATA");
 

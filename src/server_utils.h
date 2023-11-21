@@ -81,6 +81,8 @@ struct Connection
 };
 
 void send_data(const char *data, buffer *pBuffer, struct Connection *conn);
+void send_n_data(const char *data, size_t length, struct buffer *p_buffer, struct Connection *conn);
+
 void *serve_pop3_concurrent_blocking(void *server_ptr);
 void *handle_configuration_requests(void *arg);
 void handle_client_without_threading(int client, const struct sockaddr_in6 *caddr);
