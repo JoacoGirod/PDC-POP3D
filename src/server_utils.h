@@ -30,6 +30,7 @@
 #define MAX_FILENAME_LENGTH 256
 #define MAX_EMAILS 64
 #define MAX_USERNAME_LENGTH 255
+#define BUFFER_SIZE 1024       // Max Length defined in RFC Extension
 #define MAX_COMMAND_LENGTH 255 // Max Length defined in RFC Extension
 enum ConnectionStatus
 {
@@ -78,6 +79,12 @@ struct Connection
     size_t num_emails;
     char username[MAX_USERNAME_LENGTH];
     enum ConnectionStatus status;
+    uint8_t read_buff[BUFFER_SIZE];
+    uint8_t write_buff[BUFFER_SIZE];
+    uint8_t file_buff[BUFFER_SIZE];
+    buffer info_file_buff;
+    buffer info_read_buff;
+    buffer info_write_buff;
 };
 
 void send_data(const char *data, buffer *pBuffer, struct Connection *conn);

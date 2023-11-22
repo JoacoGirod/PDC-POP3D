@@ -14,6 +14,7 @@
     "PARAFELIX.C": "cpp",
     "pop3_functions.h": "c",
     "parseradt.h": "c",
+    "pop3_parser_automaton.h": "c",
     "random": "cpp",
     "stdlib.h": "c",
     "stddef.h": "c",

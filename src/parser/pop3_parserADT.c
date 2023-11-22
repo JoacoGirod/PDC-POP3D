@@ -300,15 +300,14 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
             // Execute the transformation program (in this case, /bin/cat)
             // char *transformation_program = "/bin/cat";
-            char *transformation_program = g_conf->transformation_bin_location;
-            char *const paramList[] = {transformation_program, filePath, NULL};
-            if (execve(transformation_program, paramList, NULL) == -1)
+            char *transformation_program = g_conf->transformation_script;
+            if (execl(transformation_program, transformation_program, filePath, NULL) == -1)
             {
                 log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: execvpe failed in child process");
                 exit(EXIT_FAILURE);
             }
 
-            // The code below is unreachable if execve is successful
+            // The code below is unreachable if execl is successful
             log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: Unreachable code in child process");
             exit(EXIT_FAILURE);
         }
