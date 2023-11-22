@@ -259,19 +259,9 @@ void *handle_configuration_requests(void *arg)
 
     log_message(configuration_logger, INFO, CONFIGTHREAD, "Configuration Server Running...");
 
-    struct GlobalConfiguration *g_conf = get_global_configuration();
-
-    // Configuration Client Buffer Initialization
-    struct buffer config_client_buffer;
-    buffer *p_config_client_buffer = &config_client_buffer;
-    uint8_t config_client_data_buffer[g_conf->buffers_size];
-    buffer_init(&config_client_buffer, N(config_client_data_buffer), config_client_data_buffer);
-
-    // Configuration Server Buffer Initialization
-    struct buffer config_server_buffer;
-    buffer *p_config_server_buffer = &config_server_buffer;
-    uint8_t config_server_data_buffer[g_conf->buffers_size];
-    buffer_init(&config_server_buffer, N(config_server_data_buffer), config_server_data_buffer);
+    struct ConfigServer *s_conf = get_config_server();
+    buffer_init(&s_conf->info_write_buff, BUFFER_SIZE, s_conf->write_buff);
+    buffer_init(&s_conf->info_read_buff, BUFFER_SIZE, s_conf->read_buff);
 
     int received_bytes;
     size_t available_space = 0;
@@ -286,7 +276,7 @@ void *handle_configuration_requests(void *arg)
 
     while (!done)
     {
-        uint8_t *ptr = buffer_write_ptr(p_config_client_buffer, &available_space);
+        uint8_t *ptr = buffer_write_ptr(&s_conf->info_read_buff, &available_space);
 
         received_bytes = recvfrom(udp_server, ptr, available_space, 0, (struct sockaddr *)&client_addr, &client_addr_len);
 
@@ -299,18 +289,19 @@ void *handle_configuration_requests(void *arg)
         }
         else if (received_bytes > 255)
         {
-            send_data_udp(configuration_logger, &client_info, p_config_client_buffer, "-ERR Command is too big\r\n");
+            send_data_udp(configuration_logger, &client_info, &s_conf->info_write_buff, "-ERR Command is too big\r\n");
             break;
         }
 
-        config_client_data_buffer[received_bytes] = '\0';
-        buffer_write_adv(p_config_client_buffer, received_bytes + 1);
+        s_conf->read_buff[received_bytes] = '\0';
+        buffer_write_adv(&s_conf->info_read_buff, received_bytes + 1);
 
-        log_message(configuration_logger, INFO, CONFIGTHREAD, "Received Command %s", config_client_data_buffer);
+        log_message(configuration_logger, INFO, CONFIGTHREAD, "Received Command %s", s_conf->read_buff);
 
-        config_parse_input(configuration_logger, &client_info, p_config_server_buffer, config_client_data_buffer);
+        // PARSE!
+        config_parse_input(configuration_logger, &client_info, &s_conf->info_read_buff, s_conf->read_buff);
 
-        buffer_reset(p_config_client_buffer);
+        buffer_reset(&s_conf->info_read_buff);
     }
     return NULL;
 }

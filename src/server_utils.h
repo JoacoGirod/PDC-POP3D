@@ -4,7 +4,6 @@
 #define SERVER_UTILS_H
 
 #include <stdio.h>
-#include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <limits.h>
@@ -30,7 +29,7 @@
 #define MAX_FILENAME_LENGTH 256
 #define MAX_EMAILS 64
 #define MAX_USERNAME_LENGTH 255
-#define BUFFER_SIZE 1024       // Max Length defined in RFC Extension
+#define BUFFER_SIZE 1024
 #define MAX_COMMAND_LENGTH 255 // Max Length defined in RFC Extension
 #define MAX_CONCURRENT_USERS 500
 

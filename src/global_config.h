@@ -5,6 +5,8 @@
 
 #include <stddef.h>
 #include <stdbool.h>
+#include <stdint.h>
+#include "buffer.h"
 
 #define MAX_PATH_LENGTH 256
 #define MAX_FILENAME_LENGTH 256
@@ -55,7 +57,16 @@ struct GlobalStatistics
     size_t bytes_transfered;
 };
 
+struct ConfigServer
+{
+    uint8_t read_buff[INITIAL_BUFFER_SIZE];
+    uint8_t write_buff[INITIAL_BUFFER_SIZE];
+    buffer info_write_buff;
+    buffer info_read_buff;
+};
+
 struct GlobalConfiguration *get_global_configuration();
 struct GlobalStatistics *get_global_statistics();
+struct ConfigServer *get_config_server();
 
 #endif // GLOBAL_CONFIG_H
