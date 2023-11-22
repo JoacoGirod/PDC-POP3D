@@ -62,6 +62,7 @@ int setlgf_action(char *argument, Logger *logger, const pUDPClientInfo client_in
 int setmdf_action(char *argument, Logger *logger, const pUDPClientInfo client_info, buffer *p_buffer, struct GlobalConfiguration *g_conf, struct GlobalStatistics *g_stats)
 {
     strcpy(g_conf->maildir_folder, argument);
+    g_conf->maildir_folder[strlen(argument)] = '\0';
     send_data_udp(logger, client_info, p_buffer, "+SUC New maildir folder: ");
     send_data_udp(logger, client_info, p_buffer, g_conf->maildir_folder);
     send_data_udp(logger, client_info, p_buffer, "\n");
@@ -203,7 +204,7 @@ static bool is_valid_token(const char *token, Logger *logger, const pUDPClientIn
     if (strncmp(g_conf->authorization_token, token, 10) != 0)
     {
         // Authorization token is invalid
-        send_data_udp(logger, client_info, p_buffer, "Invalid authorization token\n");
+        send_data_udp(logger, client_info, p_buffer, "-ERR Invalid authorization token\n");
         return false;
     }
     return true;
@@ -215,7 +216,7 @@ static bool is_valid_get_set(const char *operation, const char *argument, Logger
     {
         if (has_argument(argument))
         {
-            send_data_udp(logger, client_info, p_buffer, "No Argument expected for GET command\n");
+            send_data_udp(logger, client_info, p_buffer, "-ERR No argument expected for GET command\n");
             return false;
         }
         return true;
@@ -224,14 +225,14 @@ static bool is_valid_get_set(const char *operation, const char *argument, Logger
     {
         if (!has_argument(argument))
         {
-            send_data_udp(logger, client_info, p_buffer, "Argument expected for SET command\n");
+            send_data_udp(logger, client_info, p_buffer, "-ERR Argument expected for SET command\n");
             return false;
         }
         return true;
     }
     else
     {
-        send_data_udp(logger, client_info, p_buffer, "Second command must be GET or SET\n");
+        send_data_udp(logger, client_info, p_buffer, "-ERR Second command must be GET or SET\n");
         return false;
     }
 }
@@ -275,7 +276,7 @@ static bool is_valid_object_code(const char *object_code, Logger *logger, const 
             return true;
         }
     }
-    send_data_udp(logger, client_info, p_buffer, "Invalid object code\n");
+    send_data_udp(logger, client_info, p_buffer, "-ERR Invalid object code\n");
     return false;
 }
 
@@ -293,7 +294,7 @@ config_command get_config_command(const char *command)
 
 int config_parse_input(Logger *logger, const pUDPClientInfo client_info, buffer *p_buffer, uint8_t *input)
 {
-    send_data_udp(logger, client_info, p_buffer, (char *)input);
+    // send_data_udp(logger, client_info, p_buffer, (char *)input);
     extern const parser_automaton config_parser_automaton;
     parserADT config_parser = parser_init(&config_parser_automaton);
 
@@ -307,12 +308,12 @@ int config_parse_input(Logger *logger, const pUDPClientInfo client_info, buffer 
 
         if (result == PARSER_FINISHED)
         {
-            printf("Parser finished successfully.\n");
+            log_message(logger, INFO, CONFIGPARSER, " - Parser finished");
             break;
         }
         else if (result == PARSER_ERROR)
         {
-            printf("Parser encountered an error.\n");
+            log_message(logger, ERROR, CONFIGPARSER, " - Parser finished");
             break;
         }
     }
@@ -342,7 +343,7 @@ int config_parse_input(Logger *logger, const pUDPClientInfo client_info, buffer 
         int operationRet = config_commands[command].action(arg_buffer, logger, client_info, p_buffer, g_conf, g_stats);
         if (operationRet == -1)
         {
-            send_data_udp(logger, client_info, p_buffer, "Error executing command\n");
+            send_data_udp(logger, client_info, p_buffer, "-ERR Error executing command\n");
         }
     }
 

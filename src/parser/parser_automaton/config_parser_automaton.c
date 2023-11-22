@@ -48,8 +48,15 @@ void get_config_object_code(parserADT p, char *buff, int max)
 void get_config_argument(parserADT p, char *buff, int max)
 {
     config_parser_data *d = (config_parser_data *)p->data;
-    strncpy(buff, d->argument, max - 1);
-    buff[max - 1] = '\0';
+
+    // Find the position of the newline character
+    size_t newline_pos = strcspn(d->argument, "\n");
+
+    // Copy the substring without the newline character
+    strncpy(buff, d->argument, newline_pos);
+
+    // Null-terminate the copied string
+    buff[newline_pos] = '\0';
 }
 
 // Parser action functions

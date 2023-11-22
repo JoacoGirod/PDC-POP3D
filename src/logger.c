@@ -152,6 +152,9 @@ void log_message(Logger *logger, LogLevel level, LogComponent component, const c
     case COMMANDPARSER:
         fprintf(logFile, "COMMAND PARSER");
         break;
+    case CONFIGPARSER:
+        fprintf(logFile, "CONFIG PARSER");
+        break;
     case ARGPARSER:
         fprintf(logFile, "ARGUMENTS PARSER");
         break;

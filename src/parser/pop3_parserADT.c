@@ -7,7 +7,7 @@
 #include "parserADT.h"
 #include "pop3_functions.h"
 
-#define BASE_DIR "/tmp/Maildir"
+#define BASE_DIR "/tmp"
 #define MAX_FILE_PATH 700
 #define MAX_COMMAND_LENGTH 255  // octets
 #define MAX_RESPONSE_LENGTH 512 // octets
@@ -26,7 +26,7 @@
 #define ERR_BAD_ARGUMENT_RESPONSE "-ERR Bad argument.\r\n"
 #define ERR_INVALID_EMAIL_INDEX_RESPONSE "-ERR Invalid email index.\r\n"
 #define ERR_DEFAULT_ACTION "-ERR Command not found.\r\n"
-
+#define ERR_NO_USERNAME_GIVEN_RESPONSE "-ERR No username given.\r\n"
 #define DOT_RESPONSE ".\r\n"
 
 // aux function for STAT command action
@@ -61,6 +61,12 @@ int pass_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
     Logger *logger = conn->logger;
     log_message(logger, INFO, COMMAND_HANDLER, " - PASS: Pass action started");
 
+    if (strcmp(conn->username, "") == 0)
+    {
+        send_data(ERR_NO_USERNAME_GIVEN_RESPONSE, dataSendingBuffer, conn);
+        log_message(logger, INFO, COMMAND_HANDLER, " - PASS: No user given");
+        return -1;
+    }
     struct GlobalConfiguration *gConf = get_global_configuration();
 
     log_message(logger, INFO, COMMAND_HANDLER, " - PASS: Searching for user to authenticate");
@@ -81,13 +87,16 @@ int pass_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
                 // retrieve user's emails
                 char filePath[MAX_FILE_PATH];
-                snprintf(filePath, sizeof(filePath), "%s/%s", gConf->maildir_folder, conn->username);
+                size_t filePathLength = strlen(gConf->mailroot_folder) + strlen(conn->username) + strlen(gConf->maildir_folder) + 3;
+                snprintf(filePath, filePathLength, "%s/%s/%s", gConf->mailroot_folder, conn->username, gConf->maildir_folder);
+                filePath[filePathLength] = '\0';
                 retrieve_emails(filePath, conn);
                 return 0;
             }
             else
             {
                 // incorrect password
+                memset(conn->username, '\0', sizeof(conn->username));
                 send_data(ERR_AUTH_RESPONSE, dataSendingBuffer, conn);
                 log_message(logger, ERROR, COMMAND_HANDLER, " - PASS: Incorrect password");
                 return -1;
@@ -202,7 +211,8 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
     char filePath[MAX_FILE_PATH];
     size_t buffer_size = sizeof(g_conf->maildir_folder) + sizeof(conn->username) + sizeof(mail->folder) + sizeof(mail->filename) + 3;
 
-    snprintf(filePath, buffer_size, "%s/%s/%s/%s", g_conf->maildir_folder, conn->username, mail->folder, mail->filename);
+    //    /rootdir/username/maildir/mailfolder/filename
+    snprintf(filePath, buffer_size, "%s/%s/%s/%s/%s", g_conf->mailroot_folder, conn->username, g_conf->maildir_folder, mail->folder, mail->filename);
 
     if (g_conf->transformation)
     {
@@ -216,7 +226,6 @@ int retr_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 
         // Fork the process
         pid_t pid = fork();
-
         if (pid == -1)
         {
             log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: Error forking process");
@@ -447,6 +456,8 @@ int quit_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
     Logger *logger = conn->logger;
     log_message(logger, INFO, COMMANDPARSER, " - QUIT: Quit action started");
 
+    struct GlobalConfiguration *g_conf = get_global_configuration();
+
     // Envía la respuesta al cliente
     send_data(OK_SIGN_OFF, dataSendingBuffer, conn);
 
@@ -474,7 +485,8 @@ int quit_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
         if (conn->mails[i].status == DELETED)
         {
             char filePath[MAX_FILE_PATH];
-            snprintf(filePath, sizeof(filePath), "%s/%s/%s/%s", BASE_DIR, conn->username, conn->mails[i].folder, conn->mails[i].filename);
+            size_t filePathLength = strlen(g_conf->mailroot_folder) + strlen(conn->username) + strlen(conn->username) + strlen(g_conf->maildir_folder) + strlen(conn->mails[i].folder) + strlen(conn->mails[i].filename) + 4;
+            snprintf(filePath, filePathLength, "%s/%s/%s/%s/%s", g_conf->mailroot_folder, conn->username, g_conf->maildir_folder, conn->mails[i].folder, conn->mails[i].filename);
             delete_file(filePath);
         }
         else if (conn->mails[i].status == RETRIEVED)
@@ -482,11 +494,16 @@ int quit_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
             // se fija que no este en cur
             if (!(conn->mails[i].folder[0] == 'c'))
             {
-                if (move_file_new_to_cur(BASE_DIR, conn->username, conn->mails[i].filename) == -1)
+                // basedir: mailroot, username, maildir    || filename
+                char filePath[MAX_FILE_PATH];
+                size_t filePathLength = strlen(g_conf->mailroot_folder) + strlen(conn->username) + strlen(g_conf->maildir_folder) + 3;
+                snprintf(filePath, filePathLength, "%s/%s/%s", g_conf->mailroot_folder, conn->username, g_conf->maildir_folder);
+                if (move_file_new_to_cur(filePath, conn->mails[i].filename) == -1)
                 {
                     log_message(logger, ERROR, CONNECTION, " - QUIT: Error moving file from new to cur");
                     return -1;
                 }
+                strcpy(conn->mails[i].folder, "cur");
             }
         }
         // Restablece el estado del correo a UNCHANGED
@@ -509,6 +526,7 @@ int capa_action(struct Connection *conn, struct buffer *dataSendingBuffer, char 
 {
     Logger *logger = conn->logger;
     log_message(logger, INFO, COMMAND_HANDLER, " - CAPA: Capa action started");
+
     if (conn->status == AUTHORIZATION)
     {
         send_data(OK_CAPA_AUTHORIZED_MESSAGE, dataSendingBuffer, conn);
@@ -525,7 +543,6 @@ int default_action(struct Connection *conn, struct buffer *dataSendingBuffer, ch
 {
     Logger *logger = conn->logger;
     log_message(logger, INFO, COMMAND_HANDLER, " - COMMANDO NOT FOUND: Default action started, sending -ERR");
-    // invalid command ya es tirado por parser, no se que hace esto
     send_data(ERR_DEFAULT_ACTION, dataSendingBuffer, conn);
     log_message(logger, INFO, COMMAND_HANDLER, " - COMMANDO NOT FOUND: Default action finished");
     return 0;
@@ -652,17 +669,20 @@ int parse_input(const uint8_t *input, struct Connection *conn, struct buffer *da
         send_data(ERR_UNKNOWN_COMMAND_RESPONSE, dataSendingBuffer, conn);
         log_message(conn->logger, ERROR, COMMANDPARSER, " - Unknown command");
     }
-    if (!commands[command].accept_arguments(arg_buffer))
-    {
-        send_data(ERR_BAD_ARGUMENT_RESPONSE, dataSendingBuffer, conn);
-        log_message(conn->logger, ERROR, COMMANDPARSER, " - Bad argument");
-    }
     else
     {
-        int commandRet = commands[command].action(conn, dataSendingBuffer, arg_buffer);
-        if (commandRet == -1)
+        if (!commands[command].accept_arguments(arg_buffer))
         {
-            log_message(conn->logger, ERROR, COMMANDPARSER, " - Error executing command");
+            send_data(ERR_BAD_ARGUMENT_RESPONSE, dataSendingBuffer, conn);
+            log_message(conn->logger, ERROR, COMMANDPARSER, " - Bad argument");
+        }
+        else
+        {
+            int commandRet = commands[command].action(conn, dataSendingBuffer, arg_buffer);
+            if (commandRet == -1)
+            {
+                log_message(conn->logger, ERROR, COMMANDPARSER, " - Error executing command");
+            }
         }
     }
 

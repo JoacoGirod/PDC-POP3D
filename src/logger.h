@@ -22,6 +22,7 @@ typedef enum
 typedef enum
 {
     COMMANDPARSER,
+    CONFIGPARSER,
     COMMAND_HANDLER,
     ARGPARSER,
     CONFIGTHREAD,

@@ -2,10 +2,10 @@
 
 # Function to create Maildir structure and populate with sample emails
 create_maildir_structure() {
-    local maildir_path="/tmp/Maildir"
+    local maildir_path="/tmp"
     mkdir -p "$maildir_path"
 
-    local user_path="$maildir_path/testuser"
+    local user_path="$maildir_path/testuser/Maildir"
     mkdir -p "$user_path"
 
     for folder in "new" "tmp" "cur"; do
@@ -31,7 +31,7 @@ create_maildir_structure() {
                             .Hola parte 3.\r\n
                             .\r\n
                             HOAL COMO ESTAS TODO BIEN?\r\n"
-                            
+
     local email_content2="Return-Path: <joaquin@foo.pdc>\n
                         X-Original-To: joaquin@foo.pdc\n
                         Delivered-To: joaquin@foo.pdc\n
@@ -87,6 +87,6 @@ create_maildir_structure() {
 create_maildir_structure
 
 # Create a 100MB file using dd command
-dd if=/dev/urandom of=/tmp/Maildir/testuser/cur/large_email bs=4096 count=25600
+dd if=/dev/urandom of=/tmp/testuser/Maildir/cur/large_email bs=4096 count=25600
 
 echo "100MB file created successfully."

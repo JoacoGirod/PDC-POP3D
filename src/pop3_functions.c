@@ -174,7 +174,6 @@ int move_file(const char *source_path, const char *dest_path)
     // Rename the file (move from source to destination)
     if (rename(source_path, full_dest_path) == 0)
     {
-        printf("File moved successfully: %s\n", filename);
         return 0; // Success
     }
     else
@@ -184,14 +183,15 @@ int move_file(const char *source_path, const char *dest_path)
     }
 }
 
-int move_file_new_to_cur(const char *base_dir, char *username, const char *filename)
+int move_file_new_to_cur(const char *base_dir, const char *filename)
 {
-
+    // /mailroot/username/Maildir/CuroNew "%s/%s/%s/%s/%s", g_conf->mailroot_folder, conn->username, g_conf->maildir_folder, mail->folder, mail->filename
     char from_path[MAX_PATH_LENGTH];
-    snprintf(from_path, sizeof(from_path), "%s/%s/new/%s", base_dir, username, filename);
+    // g_conf->mailroot_folder, conn->username, g_conf->maildir_folder,
+    snprintf(from_path, sizeof(from_path), "%s/new/%s", base_dir, filename);
 
     char toPath[MAX_PATH_LENGTH];
-    snprintf(toPath, sizeof(toPath), "%s/%s/cur/%s", base_dir, username, filename);
+    snprintf(toPath, sizeof(toPath), "%s/cur", base_dir);
 
     return move_file(from_path, toPath);
 }
