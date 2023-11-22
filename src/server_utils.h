@@ -32,6 +32,8 @@
 #define MAX_USERNAME_LENGTH 255
 #define BUFFER_SIZE 1024       // Max Length defined in RFC Extension
 #define MAX_COMMAND_LENGTH 255 // Max Length defined in RFC Extension
+#define MAX_CONCURRENT_USERS 500
+
 enum ConnectionStatus
 {
     AUTHORIZATION,

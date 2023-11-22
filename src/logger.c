@@ -78,9 +78,6 @@ Logger *initialize_logger(const char *logFileName)
         return NULL;
     }
 
-    // Add an initial line to the log file
-    fprintf(logFile, "LOGS\n");
-
     fclose(logFile);
 
     return logger;

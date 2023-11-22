@@ -10,31 +10,32 @@ void sigterm_handler(const int signal)
 // Attends POP3 clients and assigns unique blocking threads to each one
 void *serve_pop3_concurrent_blocking(void *server_ptr)
 {
+    // Transform parameter
     int server = *((int *)server_ptr);
 
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    long long milliseconds = (long long)tv.tv_sec * 1000 + tv.tv_usec / 1000;
-
+    // Initialize Logger
     char thread_log_file_name[50]; // Adjust the size as needed
-    sprintf(thread_log_file_name, "distributorThreadLogs%lld.log", milliseconds);
-
+    sprintf(thread_log_file_name, "distributor_thread_%llx.log", (unsigned long long)pthread_self());
     Logger *distributor_thread_logger = initialize_logger(thread_log_file_name);
 
+    // Update Statitics
+    struct GlobalStatistics *g_stat = get_global_statistics();
+    g_stat->total_clients++;
+
     log_message(distributor_thread_logger, INFO, DISTRIBUTORTHREAD, "Awaiting for connections...");
-    for (; !done;)
+    while (!done)
     {
+        // Accept connections from both IPv4 and IPv6
         struct sockaddr_in6 caddr;
         socklen_t caddr_len = sizeof(caddr);
-        // Wait for a client to connect
         const int client = accept(server, (struct sockaddr *)&caddr, &caddr_len);
+
         if (client < 0)
         {
             log_message(distributor_thread_logger, ERROR, DISTRIBUTORTHREAD, "Unable to accept incoming socket");
         }
         else
         {
-            // TODO(juan): limitar la cantidad de hilos concurrentes
             struct Connection *c = malloc(sizeof(struct Connection));
             if (c == NULL)
             {
@@ -53,8 +54,12 @@ void *serve_pop3_concurrent_blocking(void *server_ptr)
                 buffer_init(&c->info_write_buff, BUFFER_SIZE, c->write_buff);
                 memcpy(&(c->addr), &caddr, caddr_len);
 
-                log_message(distributor_thread_logger, INFO, DISTRIBUTORTHREAD, "Attempting to create a Thread");
-                if (pthread_create(&tid, 0, handle_connection_pthread, c) != 0)
+                if (g_stat->concurrent_clients > MAX_CONCURRENT_USERS)
+                {
+                    log_message(distributor_thread_logger, INFO, DISTRIBUTORTHREAD, "Unable to accept incoming socket due to high demand");
+                    send_data("-ERR Connection refused due to high demand (^-^)\r\n", &c->info_write_buff, c);
+                }
+                else if (pthread_create(&tid, 0, handle_connection_pthread, c) != 0)
                 {
                     free(c);
                     // We transition into a non-threaded manner
@@ -70,21 +75,20 @@ void *serve_pop3_concurrent_blocking(void *server_ptr)
 // Accomodates resources for the handler
 void *handle_connection_pthread(void *args)
 {
+    // Transform parameter
     struct Connection *c = args;
 
+    // Initialize logger with uniqueness through time
     struct timeval tv;
     gettimeofday(&tv, NULL);
-    long long milliseconds = (long long)tv.tv_sec * 1000 + tv.tv_usec / 1000;
-
-    char thread_log_filename[30]; // Adjust the size as needed
-    sprintf(thread_log_filename, "threadLog%lld.log", milliseconds);
-    // Initialize the logger for the client thread
+    char thread_log_filename[40];
+    sprintf(thread_log_filename, "client_thread_%lld.log", (long long)tv.tv_sec * 1000 + tv.tv_usec / 1000);
     Logger *client_thread_logs = initialize_logger(thread_log_filename);
-
-    log_message(client_thread_logs, INFO, THREAD, "Executing Thread Routine");
 
     // Add the Logger to the connection struct
     c->logger = client_thread_logs;
+
+    log_message(client_thread_logs, INFO, THREAD, "Executing Main POP3 Handler");
 
     pthread_detach(pthread_self());
     pop3_handle_connection(c);
@@ -96,23 +100,14 @@ void *handle_connection_pthread(void *args)
 void pop3_handle_connection(struct Connection *conn)
 {
     log_message(conn->logger, INFO, THREADMAINHANDLER, "Executing Main Thread Handler");
-    struct GlobalConfiguration *g_conf = get_global_configuration();
 
+    // Logging Unique Configuration
+    struct GlobalConfiguration *g_conf = get_global_configuration();
     log_message(conn->logger, INFO, THREADMAINHANDLER, "Using buffer size : %d", g_conf->buffers_size);
 
-    // Server Buffer Initialization
-    // struct buffer serverBuffer;
-    // buffer *pServerBuffer = &serverBuffer;
-    // // TODO verify this size is the correct, big mails case!
-    // uint8_t serverDataBuffer[g_conf->buffers_size]; // This size should be subject to alteration through Configuration Server
-    // buffer_init(&serverBuffer, N(serverDataBuffer), serverDataBuffer);
-
-    // // Client Buffer Initialization
-    // struct buffer clientBuffer;
-    // buffer *pClientBuffer = &clientBuffer;
-    // // TODO verify this size is the correct
-    // uint8_t clientDataBuffer[g_conf->buffers_size]; // This size should be subject to alteration through Configuration Server
-    // buffer_init(&clientBuffer, N(clientDataBuffer), clientDataBuffer);
+    // Update Global Statistics
+    struct GlobalStatistics *g_stat = get_global_statistics();
+    g_stat->concurrent_clients++;
 
     // Initial Salute
     log_message(conn->logger, INFO, THREADMAINHANDLER, "Sending Initial Salute");
@@ -126,21 +121,20 @@ void pop3_handle_connection(struct Connection *conn)
     // Maintain the call and response with the client
     do
     {
+        log_message(conn->logger, INFO, THREADMAINHANDLER, "Awaiting for Command");
+
         uint8_t *basePointer = buffer_write_ptr(&conn->info_read_buff, &availableSpace);
         uint8_t *ptr = basePointer;
         totalBytesRead = 0;
-
-        // Construct complete commands with the segmented data received through the TCP Stream
         do
         {
-            log_message(conn->logger, INFO, THREADMAINHANDLER, "Awaiting for Command");
-
             bytesRead = recv(conn->fd, ptr, availableSpace, 0);
             totalBytesRead += bytesRead;
 
             if (totalBytesRead > MAX_COMMAND_LENGTH)
             {
                 log_message(conn->logger, ERROR, THREADMAINHANDLER, "Received command exceeds the maximum allowed length");
+                send_data("-ERR Command exceds buffer size\r\n", &conn->info_write_buff, conn);
                 error = true;
                 break;
             }
@@ -153,11 +147,14 @@ void pop3_handle_connection(struct Connection *conn)
                 ptr = buffer_write_ptr(&conn->info_read_buff, &availableSpace); // Update pointer
 
                 char *commandPtr = strstr((char *)basePointer, "\r\n");
-                while (commandPtr != NULL)
+                while (commandPtr != NULL) // There is a complete command
                 {
-                    *commandPtr = '\0'; // Null-terminate the command
+                    // Null-terminate the command (stepping over the \r)
+                    *commandPtr = '\0';
+
+                    // Sending the complete command to the parser
                     log_message(conn->logger, INFO, THREADMAINHANDLER, "Command sent to parser: '%s'", basePointer);
-                    parse_input(basePointer, conn, &conn->info_write_buff);
+                    parse_input(basePointer, conn);
 
                     // Move to the next command (if any)
                     basePointer = (uint8_t *)(commandPtr + 2);                      // Move beyond the "\r\n"
@@ -179,21 +176,22 @@ void pop3_handle_connection(struct Connection *conn)
                 break;
             }
         } while (!error); // Continue reading until a complete command is processed
-
-        log_message(conn->logger, INFO, THREADMAINHANDLER, "Resetting client buffer");
+        // we reset the buffer only after the pipelining
         buffer_reset(&conn->info_read_buff);
-
     } while (!error && bytesRead > 0);
 
-    log_message(conn->logger, INFO, THREADMAINHANDLER, "Freeing Resources");
+    log_message(conn->logger, INFO, THREADMAINHANDLER, "Closing Connection");
+
+    // Closing pipe
     close(conn->fd);
+    // Updating Global Statistics
+    g_stat->concurrent_clients--;
 }
 
 // Sends data through TCP socket
 void send_data(const char *data, buffer *p_buffer, struct Connection *conn /*, bool isMultiLine*/)
 {
     size_t data_length = strlen(data);
-
     send_n_data(data, data_length, p_buffer, conn);
 }
 
@@ -206,62 +204,43 @@ void send_n_data(const char *data, size_t length, struct buffer *p_buffer, struc
         // Handle the error, return, or exit as needed
         return;
     }
-
     size_t available_space;
     uint8_t *base_pointer = buffer_write_ptr(p_buffer, &available_space);
-
     if (length > available_space)
     {
         log_message(conn->logger, ERROR, THREADMAINHANDLER, "Insufficient space in the buffer to write data");
         // Handle the error, return, or exit as needed
         return;
     }
-
-    // Copy the specified length of data to the buffer
     memcpy(base_pointer, data, length);
-
-    // Null-terminate the data to ensure it's a valid string
     base_pointer[length] = '\0';
-
-    // Advance the write pointer in the buffer by the number of bytes written
     buffer_write_adv(p_buffer, length);
-
-    log_message(conn->logger, INFO, THREADMAINHANDLER, "SENDING DATA");
-
-    // Send the data to the client
     sock_blocking_write(conn->fd, p_buffer);
-
-    // Reset buffer pointers for reuse
     buffer_reset(p_buffer);
 }
 
 // Function to handle the client without threading
 void handle_client_without_threading(int client, const struct sockaddr_in6 *caddr)
 {
-    // Create a unique log file name for the thread
+    // Initializing unique log file name
     struct timeval tv;
     gettimeofday(&tv, NULL);
-    long long milliseconds = (long long)tv.tv_sec * 1000 + tv.tv_usec / 1000;
-
-    char thread_log_filename[30]; // Adjust the size as needed
-    sprintf(thread_log_filename, "threadLog%lld.log", milliseconds);
-
+    char thread_log_filename[30];
+    sprintf(thread_log_filename, "client_not_threaded_%lld.log", (long long)tv.tv_sec * 1000 + tv.tv_usec / 1000);
     // Initialize the logger with the thread-specific log file
     Logger *client_thread_logs = initialize_logger(thread_log_filename);
-
-    log_message(client_thread_logs, ERROR, ITERATIVETHREAD, "Iterative thread running");
 
     // Create a connection struct with the necessary information
     struct Connection conn;
     conn.fd = client;
     conn.addr_len = sizeof(struct sockaddr_in6);
     memcpy(&(conn.addr), caddr, sizeof(struct sockaddr_in6));
-    conn.logger = client_thread_logs; // You can set it to NULL or initialize a separate logger here
+    conn.logger = client_thread_logs;
 
-    // Call the original handling function
+    log_message(client_thread_logs, ERROR, ITERATIVETHREAD, "Executing Main POP3 Handler");
+
     pop3_handle_connection(&conn);
-
-    // Close the client socket
+    // Close connection but no resources to free
     close(client);
 }
 
@@ -270,15 +249,17 @@ void handle_client_without_threading(int client, const struct sockaddr_in6 *cadd
 // Attends and responds Configuration clients
 void *handle_configuration_requests(void *arg)
 {
-    Logger *configuration_logger = initialize_logger("configurationServer.log");
-    log_message(configuration_logger, INFO, CONFIGTHREAD, "Configuration Server is Running...");
-
-    struct GlobalConfiguration *g_conf = get_global_configuration();
-
+    // Transform argument
     int udp_server = *((int *)arg);
 
-    struct sockaddr_in client_addr;
-    socklen_t client_addr_len = sizeof(client_addr);
+    // Initialize log
+    char thread_log_file_name[45];
+    sprintf(thread_log_file_name, "config_server_%llx.log", (unsigned long long)pthread_self());
+    Logger *configuration_logger = initialize_logger(thread_log_file_name);
+
+    log_message(configuration_logger, INFO, CONFIGTHREAD, "Configuration Server Running...");
+
+    struct GlobalConfiguration *g_conf = get_global_configuration();
 
     // Configuration Client Buffer Initialization
     struct buffer config_client_buffer;
@@ -296,17 +277,19 @@ void *handle_configuration_requests(void *arg)
     size_t available_space = 0;
 
     // Create ClientInfo structure
+    struct sockaddr_in client_addr;
+    socklen_t client_addr_len = sizeof(client_addr);
     struct UDPClientInfo client_info = {
         .udp_server = udp_server,
         .client_addr = &client_addr,
         .client_addr_len = client_addr_len};
 
-    while (1)
+    while (!done)
     {
         uint8_t *ptr = buffer_write_ptr(p_config_client_buffer, &available_space);
 
-        // Receive data from the client
         received_bytes = recvfrom(udp_server, ptr, available_space, 0, (struct sockaddr *)&client_addr, &client_addr_len);
+
         log_message(configuration_logger, INFO, CONFIGTHREAD, "Client Request arrived");
 
         if (received_bytes == -1)
@@ -315,25 +298,20 @@ void *handle_configuration_requests(void *arg)
             break;
         }
         else if (received_bytes > 255)
-        { // Invalid command
-            if (send_data_udp(configuration_logger, &client_info, p_config_client_buffer, "Command is too big") == -1)
-            {
-                break;
-            }
+        {
+            send_data_udp(configuration_logger, &client_info, p_config_client_buffer, "-ERR Command is too big\r\n");
+            break;
         }
 
         config_client_data_buffer[received_bytes] = '\0';
         buffer_write_adv(p_config_client_buffer, received_bytes + 1);
+
         log_message(configuration_logger, INFO, CONFIGTHREAD, "Received Command %s", config_client_data_buffer);
-        send_data_udp(configuration_logger, &client_info, p_config_server_buffer, (char *)config_client_data_buffer);
+
         config_parse_input(configuration_logger, &client_info, p_config_server_buffer, config_client_data_buffer);
+
         buffer_reset(p_config_client_buffer);
-        // parse_config_command(logger, &client_info, pConfigServerBuffer,); // USEN send_data_udp()!
-
-        // EJEMPLO DE USO DE SEND DATA
-        // Echo the data back to the client using the managed function
     }
-
     return NULL;
 }
 
@@ -341,44 +319,30 @@ void *handle_configuration_requests(void *arg)
 int send_data_udp(Logger *logger, const struct UDPClientInfo *client_info, buffer *p_buffer, char *data)
 {
     log_message(logger, INFO, CONFIGTHREAD, "Responding client");
-
     size_t data_length = strlen(data);
-
-    if (data_length > 255)
+    if (data_length > MAX_COMMAND_LENGTH)
     {
         log_message(logger, ERROR, CONFIGTHREAD, "Data to be sent exceeds the maximum allowed length");
-        // Handle the error, return, or exit as needed
         return -1;
     }
 
     size_t available_space;
     uint8_t *base_pointer = buffer_write_ptr(p_buffer, &available_space);
-
     if (data_length > available_space)
     {
         log_message(logger, ERROR, CONFIGTHREAD, "Insufficient space in the buffer to write data");
-        // Handle the error, return, or exit as needed
         return -1;
     }
 
-    // Copy the data to the buffer
     memcpy(base_pointer, data, data_length);
-
-    // Null-terminate the data to ensure it's a valid string
     base_pointer[data_length] = '\0';
-
-    // Advance the write pointer in the buffer by the number of bytes written
     buffer_write_adv(p_buffer, data_length);
-
-    // Send the data to the client
     int sent_bytes = sendto(client_info->udp_server, base_pointer, data_length, 0, (struct sockaddr *)client_info->client_addr, client_info->client_addr_len);
     if (sent_bytes == -1)
     {
         log_message(logger, ERROR, CONFIGTHREAD, "Error sending data to client");
+        return -1;
     }
-
-    // Reset buffer pointers for reuse
     buffer_reset(p_buffer);
-
     return sent_bytes;
 }

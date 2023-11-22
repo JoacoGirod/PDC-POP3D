@@ -12,6 +12,6 @@
 
 typedef struct Connection *pconn;
 
-int parse_input(const uint8_t *input, pconn conn, struct buffer *dataSendingBuffer);
+int parse_input(const uint8_t *input, pconn conn);
 
 #endif

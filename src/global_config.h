@@ -18,11 +18,17 @@
 #define MAX_FOLDERNAME_LENGTH 256
 #define MAX_TRANSFORMATION_SCRIPT_LENGTH 10000
 #define AUTHTOKEN_LENGTH 10
+
 struct Users
 {
     char *name;
     char *pass;
 };
+
+typedef struct
+{
+    char *logFileName;
+} Logger;
 
 struct GlobalConfiguration
 {
@@ -30,6 +36,7 @@ struct GlobalConfiguration
     int pop3_port;
     char *conf_addr;
     int conf_port;
+    Logger *user_access_log;
     struct Users users[MAX_USERS];
     size_t numUsers;
     size_t buffers_size;

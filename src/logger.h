@@ -36,11 +36,6 @@ typedef enum
     CONNECTION
 } LogComponent;
 
-typedef struct
-{
-    char *logFileName;
-} Logger;
-
 // Function to initialize the logger
 Logger *initialize_logger(const char *logFileName);
 

@@ -620,7 +620,7 @@ pop3_command get_command(const char *command)
     return ERROR_COMMAND;
 }
 
-int parse_input(const uint8_t *input, struct Connection *conn, struct buffer *dataSendingBuffer)
+int parse_input(const uint8_t *input, struct Connection *conn)
 {
     // struct GlobalConfiguration *gConf = get_global_configuration();
     // Users array
@@ -665,19 +665,19 @@ int parse_input(const uint8_t *input, struct Connection *conn, struct buffer *da
     pop3_command command = get_command(cmd_buffer);
     if (command == ERROR_COMMAND)
     {
-        send_data(ERR_UNKNOWN_COMMAND_RESPONSE, dataSendingBuffer, conn);
+        send_data(ERR_UNKNOWN_COMMAND_RESPONSE, &conn->info_write_buff, conn);
         log_message(conn->logger, ERROR, COMMANDPARSER, " - Unknown command");
     }
     else
     {
         if (!commands[command].accept_arguments(arg_buffer))
         {
-            send_data(ERR_BAD_ARGUMENT_RESPONSE, dataSendingBuffer, conn);
+            send_data(ERR_BAD_ARGUMENT_RESPONSE, &conn->info_write_buff, conn);
             log_message(conn->logger, ERROR, COMMANDPARSER, " - Bad argument");
         }
         else
         {
-            int commandRet = commands[command].action(conn, dataSendingBuffer, arg_buffer);
+            int commandRet = commands[command].action(conn, &conn->info_write_buff, arg_buffer);
             if (commandRet == -1)
             {
                 log_message(conn->logger, ERROR, COMMANDPARSER, " - Error executing command");

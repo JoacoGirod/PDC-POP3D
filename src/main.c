@@ -42,6 +42,7 @@ int main(const int argc, char **argv)
 {
     struct GlobalConfiguration *g_conf = get_global_configuration();
 
+    // Global Configuration Initialization
     strcpy(g_conf->logs_folder, INITIAL_LOG_FOLDER_NAME);
     g_conf->buffers_size = INITIAL_BUFFER_SIZE;
     // g_conf->logs_folder = INITIAL_LOG_FOLDER_NAME;
@@ -50,10 +51,20 @@ int main(const int argc, char **argv)
     strcpy(g_conf->authorization_token, INITIAL_AUTHORIZATION_TOKEN);
     g_conf->transformation = false; // maybe false would be a better default and allow for change through the config server
     strcpy(g_conf->transformation_script, "/bin/cat");
-    Logger *main_logger = initialize_logger("mainLogs.log");
 
-    parse_args(argc, argv, main_logger); // Function automatically sets the Global Configuration
+    // Logger Initialization
+    char filename[45];
+    sprintf(filename, "set_up_thread_%llx.log", (unsigned long long)pthread_self());
+    Logger *main_logger = initialize_logger(filename);
 
+    // Access Logger Initialization
+    sprintf(filename, "user_access_%llx.log", (unsigned long long)pthread_self());
+    g_conf->user_access_log = initialize_logger(filename);
+
+    // User Input is introduced into the Global Configuration
+    parse_args(argc, argv, main_logger);
+
+    // Log Final Global Configuration
     log_global_configuration(main_logger);
 
     const char *err_msg;
@@ -81,8 +92,6 @@ int main(const int argc, char **argv)
         goto finally;
     }
 
-    // POP3 Server is configured to not wait for the last bytes transferred after the FIN in the TCP Connection
-    // This allows for quick restart of the server, should only be used in development
     setsockopt(pop3_server, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
 
     // Binding POP3 Server Socket
@@ -124,8 +133,6 @@ int main(const int argc, char **argv)
         goto finally;
     }
 
-    // POP3 Server is configured to not wait for the last bytes transferred after the FIN in the TCP Connection
-    // This allows for quick restart of the server, should only be used in development
     setsockopt(pop3_server_6, IPPROTO_IPV6, IPV6_V6ONLY, &(int){1}, sizeof(int));
     setsockopt(pop3_server_6, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
 
