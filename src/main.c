@@ -17,7 +17,6 @@
 
 #include "buffer.h"
 #include "netutils.h"
-#include "tests.h"
 #include "logger.h"
 #include "parserADT.h"
 #include "pop3_parser_automaton.h"
@@ -49,8 +48,7 @@ int main(const int argc, char **argv)
     strcpy(g_conf->maildir_folder, INITIAL_MAILDIRDIR_LOCATION);
     strcpy(g_conf->authorization_token, INITIAL_AUTHORIZATION_TOKEN);
     g_conf->transformation = true; // maybe false would be a better default and allow for change through the config server
-    g_conf->transformation_bin_location = "/bin/cat";
-
+    strcpy(g_conf->transformation_script, "/bin/cat");
     Logger *main_logger = initialize_logger("mainLogs.log");
 
     parse_args(argc, argv, main_logger); // Function automatically sets the Global Configuration

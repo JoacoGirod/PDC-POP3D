@@ -60,6 +60,8 @@ usage(const char *progname)
             "   -P <conf port>   Configuration Service port.\n"
             "   -u <name>:<pass> User and Password for the POP3 Server (max 10).\n"
             "   -v               Prints version info.\n"
+            "   -d <mail addr>   Prints version info.\n"
+            "   -t    .\n"
             "\n",
             progname);
     exit(1);
@@ -84,9 +86,17 @@ void parse_args(const int argc, char **argv, Logger *logger)
     {
         int option_index = 0;
         static struct option long_options[] = {
-            {0, 0, 0, 0}};
+            {"help", no_argument, 0, 'h'},
+            {"pop3_addr", required_argument, 0, 'l'},
+            {"conf_addr", required_argument, 0, 'L'},
+            {"pop3_port", required_argument, 0, 'p'},
+            {"conf_port", required_argument, 0, 'P'},
+            {"user", required_argument, 0, 'u'},
+            {"version", no_argument, 0, 'v'},
+            {"maildir", required_argument, 0, 'd'},
+            {"transformation", required_argument, 0, 't'}};
 
-        c = getopt_long(argc, argv, "hl:L:Np:P:u:v", long_options, &option_index);
+        c = getopt_long(argc, argv, "hl:L:Np:P:u:v:t:d:", long_options, &option_index);
         if (c == -1)
             break;
 
@@ -107,6 +117,17 @@ void parse_args(const int argc, char **argv, Logger *logger)
         case 'P':
             g_conf->conf_port = port(optarg);
             break;
+        case 'd':
+            if (optarg != NULL)
+            {
+                strcpy(g_conf->maildir_folder, optarg);
+            }
+            else
+            {
+                fprintf(stderr, "Error: -d option requires an argument.\n");
+                exit(1);
+            }
+            break;
         case 'u':
             if (nusers < MAX_USERS)
             {
@@ -120,10 +141,22 @@ void parse_args(const int argc, char **argv, Logger *logger)
                 exit(1);
             }
             break;
+        case 't':
+            if (optarg != NULL)
+            {
+                strcpy(g_conf->transformation_script, optarg);
+            }
+            else
+            {
+                fprintf(stderr, "Error: -t option requires an argument.\n");
+                exit(1);
+            }
+            break;
         case 'v':
             version();
             exit(0);
             break;
+
         default:
             fprintf(stderr, "unknown argument %d.\n", c);
             exit(1);

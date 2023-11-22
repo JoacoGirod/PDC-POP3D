@@ -15,6 +15,7 @@
 #define INITIAL_MAILDIRDIR_LOCATION "/tmp/Maildir"
 #define INITIAL_AUTHORIZATION_TOKEN "adminadmin"
 #define MAX_FOLDERNAME_LENGTH 256
+#define MAX_TRANSFORMATION_SCRIPT_LENGTH 10000
 #define AUTHTOKEN_LENGTH 10
 struct Users
 {
@@ -35,7 +36,7 @@ struct GlobalConfiguration
     char maildir_folder[MAX_FOLDERNAME_LENGTH];
     char authorization_token[AUTHTOKEN_LENGTH];
     bool transformation;
-    char *transformation_bin_location;
+    char transformation_script[MAX_TRANSFORMATION_SCRIPT_LENGTH];
 };
 
 struct GlobalStatistics
