@@ -412,6 +412,7 @@ int retr_action(struct Connection *conn, char *argument)
                 line_ptr = nextLine;
             }
         }
+        buffer[buffer_size - 1] = '\0';
         send_n_data(buffer, buffer_size - 1, &conn->info_write_buff, conn);
 
         free(buffer);
