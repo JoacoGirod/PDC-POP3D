@@ -20,7 +20,7 @@ $(SERVER_NAME): $(OBJS)
 	$(CC) $(CFLAGS) $(INCLUDES_DECLARATION) -c $< -o $@
 
 clean:
-	rm -rf $(LOGS) $(OBJS)
+	rm -rf $(OBJS)
 	rm -f */*.o
 
 .PHONY: clean all

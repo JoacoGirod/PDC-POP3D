@@ -5,9 +5,6 @@ LOG_DIRECTORY = ./logs
 SERVER_NAME = pop3d
 all: server
 
-valgrind:
-	cd $(SERVER_DIRECTORY);valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --verbose make all
-
 server:
 	cd $(SERVER_DIRECTORY); make all
 

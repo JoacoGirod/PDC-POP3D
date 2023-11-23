@@ -20,7 +20,7 @@
 #define SSS_A_0 3 //...
 #define START_YEAR 1900
 
-#define MAX_LOGGERS 15
+#define MAX_LOGGERS 504
 
 typedef enum
 {
