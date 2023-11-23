@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "buffer.h"
+#include <semaphore.h>
 
 #define MAX_PATH_LENGTH 256
 #define MAX_FILENAME_LENGTH 256
@@ -25,6 +26,7 @@ struct Users
 {
     char *name;
     char *pass;
+    sem_t semaphore; // Semaphore for each user
 };
 
 typedef struct

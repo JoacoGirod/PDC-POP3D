@@ -187,6 +187,13 @@ void pop3_handle_connection(struct Connection *conn)
 
     log_message(conn->logger, INFO, THREADMAINHANDLER, "Closing Connection");
 
+    for (size_t i = 0; i < g_conf->numUsers; i++)
+    {
+        if (strcmp(g_conf->users[i].name, conn->username) == 0)
+        {
+            sem_post(&g_conf->users[i].semaphore);
+        }
+    }
     // Closing pipe
     close(conn->fd);
     // Updating Global Statistics

@@ -13,6 +13,7 @@
 #define OK_LOGGED_IN_RESPONSE "+OK Logged in.\r\n"
 #define OK_CAPA_MESSAGE "+OK\r\nCAPA\r\nUSER\r\nPIPELINING\r\n.\r\n"
 #define OK_CAPA_AUTHORIZED_MESSAGE "+OK\r\nCAPA\r\nUSER\r\nPIPELINING\r\n.\r\n"
+#define OK_PERMISSION_GRANTED "+OK Waitings up! Permission granted.\r\n"
 
 #define ERR_RESPONSE "-ERR\r\n"
 #define ERR_AUTH_RESPONSE "-ERR [AUTH] Authentication failed.\r\n"
@@ -21,6 +22,7 @@
 #define ERR_INVALID_EMAIL_INDEX_RESPONSE "-ERR Invalid email index.\r\n"
 #define ERR_DEFAULT_ACTION "-ERR Command not found.\r\n"
 #define ERR_NO_USERNAME_GIVEN_RESPONSE "-ERR No username given.\r\n"
+#define ERR_USER_ALREADY_LOGGED_IN "-ERR User is already logged in and performing an operation. Waiting for clearance...\r\n"
 #define DOT_RESPONSE "\r\n.\r\n"
 #define SIMPLE_DOT_RESPONSE ".\r\n"
 
@@ -66,29 +68,47 @@ int pass_action(struct Connection *conn, char *argument)
 
     log_message(logger, INFO, COMMAND_HANDLER, " - PASS: Searching for user to authenticate");
     // find user and see if passwords match
-    for (size_t i = 0; i < get_global_configuration()->numUsers; i++)
+    for (size_t i = 0; i < gConf->numUsers; i++)
     {
         // cycle through usernames and see if they match
-        if (strcmp(conn->username, get_global_configuration()->users[i].name) == 0)
+        if (strcmp(conn->username, gConf->users[i].name) == 0)
         {
+            log_message(logger, INFO, COMMAND_HANDLER, " - PASS: User found, attempting authentication");
+
             // user found, check if passwords match
-            if (strcmp(get_global_configuration()->users[i].pass, argument) == 0)
+            if (strcmp(gConf->users[i].pass, argument) == 0)
             {
-                // send OK
-                send_data(OK_LOGGED_IN_RESPONSE, &conn->info_write_buff, conn);
-                log_message(logger, INFO, COMMAND_HANDLER, " - PASS: User authenticated");
-                // set connection status as TRANSACTION (user already authorized)
-                conn->status = TRANSACTION;
+                log_message(logger, INFO, COMMAND_HANDLER, " - PASS: Password match, waiting for semaphore");
+                if (sem_trywait(&gConf->users[i].semaphore) == 0)
+                {
 
-                // retrieve user's emails
-                char filePath[MAX_FILE_PATH];
-                size_t filePathLength = strlen(gConf->mailroot_folder) + strlen(conn->username) + strlen(gConf->maildir_folder) + 3;
-                snprintf(filePath, filePathLength, "%s/%s/%s", gConf->mailroot_folder, conn->username, gConf->maildir_folder);
-                filePath[filePathLength] = '\0';
-                retrieve_emails(filePath, conn);
-                log_message(gConf->user_access_log, INFO, CONNECTION, "Thread[%llx]: User '%s' logged successfully", (unsigned long long)pthread_self(), conn->username);
+                    log_message(logger, INFO, COMMAND_HANDLER, " - PASS: Semaphore acquired");
 
-                return 0;
+                    // send OK
+                    send_data(OK_LOGGED_IN_RESPONSE, &conn->info_write_buff, conn);
+                    log_message(logger, INFO, COMMAND_HANDLER, " - PASS: User authenticated");
+                    // set connection status as TRANSACTION (user already authorized)
+                    conn->status = TRANSACTION;
+
+                    // retrieve user's emails
+                    char filePath[MAX_FILE_PATH];
+                    size_t filePathLength = strlen(gConf->mailroot_folder) + strlen(conn->username) + strlen(gConf->maildir_folder) + 3;
+                    snprintf(filePath, filePathLength, "%s/%s/%s", gConf->mailroot_folder, conn->username, gConf->maildir_folder);
+                    filePath[filePathLength] = '\0';
+                    retrieve_emails(filePath, conn);
+                    log_message(gConf->user_access_log, INFO, CONNECTION, "Thread[%llx]: User '%s' logged successfully", (unsigned long long)pthread_self(), conn->username);
+                    return 1;
+                }
+                else
+                {
+                    log_message(logger, INFO, COMMAND_HANDLER, " - PASS: Semaphore is already held, waiting...");
+                    send_data(ERR_USER_ALREADY_LOGGED_IN, &conn->info_write_buff, conn);
+                    sem_wait(&gConf->users[i].semaphore);
+                    send_data(OK_PERMISSION_GRANTED, &conn->info_write_buff, conn);
+
+                    log_message(logger, INFO, COMMAND_HANDLER, " - PASS: Semaphore acquired");
+                    return 1;
+                }
             }
             else
             {
@@ -349,7 +369,7 @@ int retr_action(struct Connection *conn, char *argument)
 
     if (g_conf->transformation)
     {
-        log_message(logger, DEBUG, COMMAND_HANDLER, " Transformacion!");
+        log_message(logger, DEBUG, COMMAND_HANDLER, " - RETR Transformacion!");
 
         if (transform_completion(conn, filePath, mail) == -1)
         {
@@ -592,6 +612,15 @@ int quit_action(struct Connection *conn, char *argument)
         log_message(logger, ERROR, CONNECTION, " - QUIT: Error closing connection (UPDATE state)");
         return -1;
     }
+
+    for (size_t i = 0; i < g_conf->numUsers; i++)
+    {
+        if (strcmp(g_conf->users[i].name, conn->username) == 0)
+        {
+            sem_post(&g_conf->users[i].semaphore);
+        }
+    }
+
     log_message(logger, INFO, CONNECTION, " - QUIT: Connection closed (UPDATE state)");
 
     return 1;

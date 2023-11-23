@@ -31,6 +31,7 @@ user(char *s, struct Users *user)
         p++;
         user->name = s;
         user->pass = p;
+        sem_init(&user->semaphore, 0, 1);
     }
 }
 

@@ -336,6 +336,10 @@ finally:
         close(pop3_server_6);
     }
 
+    for (size_t i = 0; i < g_conf->numUsers; i++)
+    {
+        sem_destroy(&g_conf->users[i].semaphore);
+    }
     // if (conf_server_6 >= 0)
     // {
     //     close(pop3_server_6);
