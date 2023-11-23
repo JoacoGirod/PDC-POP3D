@@ -10,6 +10,16 @@
 #include <time.h>
 #include <sys/stat.h>
 #include "global_config.h"
+
+#define DEFUALT_LOGS_FOLDERNAME "logs"
+#define APPEND_MODE "a"
+#define RD_WR_EXE 0700
+#define MAX_LOG_FILE_LENGTH 512
+#define S_A_0 2   // 1 slash and 1 \0
+#define SS_A_0 3  // 2 slash and 1 \0
+#define SSS_A_0 3 //...
+#define START_YEAR 1900
+
 #define MAX_LOGGERS 15
 
 typedef enum

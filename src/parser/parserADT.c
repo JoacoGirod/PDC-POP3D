@@ -9,7 +9,7 @@
 
 #define CAPA_MESSAGE "+OK\r\nCAPA\r\nUSER\r\nPIPELINING\r\n.\r\n"
 #define CAPA_AUTHORIZED_MESSAGE "+OK\r\nCAPA\r\nUSER\r\nPIPELINING\r\n.\r\n"
-#define BASE_DIR "/tmp/Maildir"
+// #define BASE_DIR "/tmp/Maildir"
 #define MAX_FILE_PATH 700
 #define MAX_COMMAND_LENGTH 255
 #define BUFFER_SIZE 1024

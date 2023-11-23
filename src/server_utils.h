@@ -97,6 +97,6 @@ void handle_client_without_threading(int client, const struct sockaddr_in6 *cadd
 void *handle_connection_pthread(void *args);
 void pop3_handle_connection(struct Connection *conn);
 void sigterm_handler(const int signal);
-int send_data_udp(Logger *logger, const struct UDPClientInfo *client_info, buffer *p_buffer, char *data);
+int send_data_udp(Logger *logger, const struct UDPClientInfo *client_info, char *data);
 
 #endif // SERVER_UTILS_H

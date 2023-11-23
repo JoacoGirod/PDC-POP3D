@@ -12,6 +12,12 @@
 
 typedef struct Connection *pconn;
 
+#define BASE_DIR "/tmp"
+#define MAX_FILE_PATH 700
+#define MAX_COMMAND_LENGTH 255  // octets
+#define MAX_RESPONSE_LENGTH 512 // octets
+#define BUFFER_SIZE 1024
+
 int parse_input(const uint8_t *input, pconn conn);
 
 #endif

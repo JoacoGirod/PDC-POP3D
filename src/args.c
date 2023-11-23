@@ -1,9 +1,3 @@
-#include <stdio.h>  /* for printf */
-#include <stdlib.h> /* for exit */
-#include <limits.h> /* LONG_MIN et al */
-#include <string.h> /* memset */
-#include <errno.h>
-#include <getopt.h>
 
 #include "args.h"
 
@@ -61,7 +55,7 @@ usage(const char *progname)
             "   -u <name>:<pass> User and Password for the POP3 Server (max 10).\n"
             "   -v               Prints version info.\n"
             "   -d <mail addr>   Prints version info.\n"
-            "   -t    .\n"
+            "   -t '<transformation script>' Defines the transoformation script to be applied.\n"
             "\n",
             progname);
     exit(1);

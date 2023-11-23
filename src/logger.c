@@ -2,7 +2,7 @@
 
 Logger *initializedLoggers[MAX_LOGGERS] = {NULL};
 size_t numInitializedLoggers = 0;
-const char *LOG_FOLDER = "logs"; // Default logs folder
+const char *LOG_FOLDER = DEFUALT_LOGS_FOLDERNAME; // Default logs folder
 
 char *my_strdup(const char *str)
 {
@@ -25,7 +25,7 @@ void create_logs_folder()
     struct stat st = {0};
     if (stat(g_conf->logs_folder, &st) == -1)
     {
-        mkdir(g_conf->logs_folder, 0700);
+        mkdir(g_conf->logs_folder, RD_WR_EXE);
     }
 }
 
@@ -52,8 +52,8 @@ Logger *initialize_logger(const char *logFileName)
     }
 
     // Create the full path to the log file
-    char full_log_file_name[512];                                               // Adjust the size as needed
-    size_t buffer_size = sizeof(g_conf->logs_folder) + sizeof(logFileName) + 2; // Add space for '/' and null terminator
+    char full_log_file_name[MAX_LOG_FILE_LENGTH];
+    size_t buffer_size = sizeof(g_conf->logs_folder) + sizeof(logFileName) + S_A_0;
 
     snprintf(full_log_file_name, buffer_size, "%s/%s", g_conf->logs_folder, logFileName);
 
@@ -68,7 +68,7 @@ Logger *initialize_logger(const char *logFileName)
 
     initializedLoggers[numInitializedLoggers++] = logger;
 
-    FILE *logFile = fopen(logger->logFileName, "a");
+    FILE *logFile = fopen(logger->logFileName, APPEND_MODE);
 
     if (logFile == NULL)
     {
@@ -115,7 +115,7 @@ void log_message(Logger *logger, LogLevel level, LogComponent component, const c
     }
 
     // Open the log file in append mode
-    FILE *logFile = fopen(logger->logFileName, "a");
+    FILE *logFile = fopen(logger->logFileName, APPEND_MODE);
 
     if (logFile == NULL)
     {
@@ -131,7 +131,7 @@ void log_message(Logger *logger, LogLevel level, LogComponent component, const c
 
     // Print timestamp
     fprintf(logFile, "[%04d-%02d-%02d %02d:%02d:%02d] ",
-            tm_info->tm_year + 1900, tm_info->tm_mon + 1, tm_info->tm_mday,
+            tm_info->tm_year + START_YEAR, tm_info->tm_mon + 1, tm_info->tm_mday,
             tm_info->tm_hour, tm_info->tm_min, tm_info->tm_sec);
 
     // Print log level

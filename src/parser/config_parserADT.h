@@ -10,6 +10,6 @@
 
 typedef struct UDPClientInfo *pUDPClientInfo;
 
-int config_parse_input(Logger *logger, const pUDPClientInfo client_info, buffer *p_buffer, uint8_t *input);
+int config_parse_input(Logger *logger, const pUDPClientInfo client_info, uint8_t *input);
 
 #endif

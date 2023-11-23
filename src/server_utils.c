@@ -1,5 +1,10 @@
 #include "server_utils.h"
 
+#define THO 1000
+#define OK_POP3_SERVER_READY "+OK POP3 server ready (^-^)\r\n"
+#define ERR_HIGH_DEMAND "-ERR Connection refused due to high demand (^-^)\r\n"
+#define MAX_LOG_FILE_SHORT 50
+
 static bool done = false;
 void sigterm_handler(const int signal)
 {
@@ -14,7 +19,7 @@ void *serve_pop3_concurrent_blocking(void *server_ptr)
     int server = *((int *)server_ptr);
 
     // Initialize Logger
-    char thread_log_file_name[50]; // Adjust the size as needed
+    char thread_log_file_name[MAX_LOG_FILE_SHORT]; // Adjust the size as needed
     sprintf(thread_log_file_name, "distributor_thread_%llx.log", (unsigned long long)pthread_self());
     Logger *distributor_thread_logger = initialize_logger(thread_log_file_name);
 
@@ -57,7 +62,7 @@ void *serve_pop3_concurrent_blocking(void *server_ptr)
                 if (g_stat->concurrent_clients > MAX_CONCURRENT_USERS)
                 {
                     log_message(distributor_thread_logger, INFO, DISTRIBUTORTHREAD, "Unable to accept incoming socket due to high demand");
-                    send_data("-ERR Connection refused due to high demand (^-^)\r\n", &c->info_write_buff, c);
+                    send_data(ERR_HIGH_DEMAND, &c->info_write_buff, c);
                 }
                 else if (pthread_create(&tid, 0, handle_connection_pthread, c) != 0)
                 {
@@ -81,8 +86,8 @@ void *handle_connection_pthread(void *args)
     // Initialize logger with uniqueness through time
     struct timeval tv;
     gettimeofday(&tv, NULL);
-    char thread_log_filename[40];
-    sprintf(thread_log_filename, "client_thread_%lld.log", (long long)tv.tv_sec * 1000 + tv.tv_usec / 1000);
+    char thread_log_filename[MAX_LOG_FILE_SHORT];
+    sprintf(thread_log_filename, "client_thread_%lld.log", (long long)tv.tv_sec * THO + tv.tv_usec / THO);
     Logger *client_thread_logs = initialize_logger(thread_log_filename);
 
     // Add the Logger to the connection struct
@@ -111,7 +116,7 @@ void pop3_handle_connection(struct Connection *conn)
 
     // Initial Salute
     log_message(conn->logger, INFO, THREADMAINHANDLER, "Sending Initial Salute");
-    send_data("+OK POP3 server ready (^-^)\r\n", &conn->info_write_buff, conn);
+    send_data(OK_POP3_SERVER_READY, &conn->info_write_buff, conn);
 
     bool error = false;
     size_t availableSpace;
@@ -225,8 +230,8 @@ void handle_client_without_threading(int client, const struct sockaddr_in6 *cadd
     // Initializing unique log file name
     struct timeval tv;
     gettimeofday(&tv, NULL);
-    char thread_log_filename[30];
-    sprintf(thread_log_filename, "client_not_threaded_%lld.log", (long long)tv.tv_sec * 1000 + tv.tv_usec / 1000);
+    char thread_log_filename[MAX_LOG_FILE_SHORT];
+    sprintf(thread_log_filename, "client_not_threaded_%lld.log", (long long)tv.tv_sec * THO + tv.tv_usec / THO);
     // Initialize the logger with the thread-specific log file
     Logger *client_thread_logs = initialize_logger(thread_log_filename);
 
@@ -253,7 +258,7 @@ void *handle_configuration_requests(void *arg)
     int udp_server = *((int *)arg);
 
     // Initialize log
-    char thread_log_file_name[45];
+    char thread_log_file_name[MAX_LOG_FILE_SHORT];
     sprintf(thread_log_file_name, "config_server_%llx.log", (unsigned long long)pthread_self());
     Logger *configuration_logger = initialize_logger(thread_log_file_name);
 
@@ -287,9 +292,9 @@ void *handle_configuration_requests(void *arg)
             log_message(configuration_logger, ERROR, CONFIGTHREAD, "Error receiving data from client");
             break;
         }
-        else if (received_bytes > 255)
+        else if (received_bytes > MAX_COMMAND_LENGTH)
         {
-            send_data_udp(configuration_logger, &client_info, &s_conf->info_write_buff, "-ERR Command is too big\r\n");
+            send_data_udp(configuration_logger, &client_info, "-ERR Command is too big\r\n");
             break;
         }
 
@@ -299,7 +304,7 @@ void *handle_configuration_requests(void *arg)
         log_message(configuration_logger, INFO, CONFIGTHREAD, "Received Command %s", s_conf->read_buff);
 
         // PARSE!
-        config_parse_input(configuration_logger, &client_info, &s_conf->info_read_buff, s_conf->read_buff);
+        config_parse_input(configuration_logger, &client_info, s_conf->read_buff);
 
         buffer_reset(&s_conf->info_read_buff);
     }
@@ -307,8 +312,11 @@ void *handle_configuration_requests(void *arg)
 }
 
 // Function to send data to the client, managing buffer advancement and resetting
-int send_data_udp(Logger *logger, const struct UDPClientInfo *client_info, buffer *p_buffer, char *data)
+int send_data_udp(Logger *logger, const struct UDPClientInfo *client_info, char *data)
 {
+    struct ConfigServer *s_conf = get_config_server();
+    buffer *p_buffer = &s_conf->info_write_buff;
+
     log_message(logger, INFO, CONFIGTHREAD, "Responding client");
     size_t data_length = strlen(data);
     if (data_length > MAX_COMMAND_LENGTH)

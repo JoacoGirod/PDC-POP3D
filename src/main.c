@@ -24,6 +24,10 @@
 #include "server_utils.h"
 #include "global_config.h"
 
+#define MAX_USER_SIZE 10
+#define DEFAULT_CAT_TRANSFORMATION "/bin/cat"
+#define MAX_WAITLIST_SIZE 20
+
 static void log_global_configuration(Logger *main_logger)
 {
     struct GlobalConfiguration *global_config_instance = get_global_configuration();
@@ -33,7 +37,7 @@ static void log_global_configuration(Logger *main_logger)
     log_message(main_logger, INFO, SETUP, "Configuration Service Address (UDP) : %s", global_config_instance->conf_addr);
     log_message(main_logger, INFO, SETUP, "Configuration Service Port (UDP) : %d", global_config_instance->conf_port);
     log_message(main_logger, INFO, SETUP, "Users Registered (%d):", global_config_instance->numUsers);
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < MAX_USER_SIZE; i++)
         log_message(main_logger, INFO, SETUP, "%s", global_config_instance->users[i].name);
 }
 
@@ -50,7 +54,7 @@ int main(const int argc, char **argv)
     strcpy(g_conf->maildir_folder, INITIAL_MAILDIRDIR_LOCATION);
     strcpy(g_conf->authorization_token, INITIAL_AUTHORIZATION_TOKEN);
     g_conf->transformation = false; // maybe false would be a better default and allow for change through the config server
-    strcpy(g_conf->transformation_script, "/bin/cat");
+    strcpy(g_conf->transformation_script, DEFAULT_CAT_TRANSFORMATION);
 
     // Logger Initialization
     char filename[45];
@@ -104,7 +108,7 @@ int main(const int argc, char **argv)
 
     // Listening on POP3 Server Socket
     log_message(main_logger, INFO, SETUPPOP3, "Configuring Listening Queue for Server");
-    if (listen(pop3_server, 20) < 0)
+    if (listen(pop3_server, MAX_WAITLIST_SIZE) < 0)
     {
         err_msg = "[POP3] Unable to listen on POP3 server socket";
         goto finally;
@@ -146,7 +150,7 @@ int main(const int argc, char **argv)
 
     // Listening on POP3 Server Socket
     log_message(main_logger, INFO, SETUPPOP3, "Configuring Listening Queue for Server");
-    if (listen(pop3_server_6, 20) < 0)
+    if (listen(pop3_server_6, MAX_WAITLIST_SIZE) < 0)
     {
         err_msg = "[POP3] Unable to listen on POP3 server socket";
         goto finally;
