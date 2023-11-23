@@ -1,5 +1,37 @@
 #!/bin/bash
 
+# Function to create a mailbox for a user
+create_mailbox() {
+    local maildir_path="$1"
+    local username="$2"
+
+    local user_path="$maildir_path/$username/Maildir"
+    mkdir -p "$user_path"
+
+    for folder in "new" "tmp" "cur"; do
+        mkdir -p "$user_path/$folder"
+    done
+
+    # Sample email for the user
+    local email_content="Return-Path: <$username@foo.pdc>\r\n
+                        X-Original-To: $username@foo.pdc\r\n
+                        Delivered-To: $username@foo.pdc\r\n
+                        Received: from $username (localhost [127.0.0.1])\r\n
+                            by $username.foo.pdc (Postfix) with ESMTP id 123456789\r\n
+                            for <$username@foo.pdc>; Thu, 31 Aug 2023 12:00:00 -0300 (-03)\r\n
+                        Subject: Sample Email\r\n
+                        From: $username@foo.pdc\r\n
+                        Date: Thu, 31 Aug 2023 12:00:00 -0300 (-03)\r\n
+                        \r\n
+                        This is a sample email for $username.\r\n
+                        "
+
+    # Populate cur directory with the sample email
+    echo -e "$email_content" >"$user_path/cur/email_$username"
+
+    echo "Mailbox for $username created successfully."
+}
+
 # Function to create Maildir structure and populate with sample emails
 create_maildir_structure() {
     local maildir_path="/tmp"
@@ -11,6 +43,12 @@ create_maildir_structure() {
     for folder in "new" "tmp" "cur"; do
         mkdir -p "$user_path/$folder"
     done
+
+    # Create mailbox for the second user (testuser2)
+    create_mailbox "$maildir_path" "testuser2"
+
+    # Create mailbox for the third user (testuser3)
+    create_mailbox "$maildir_path" "testuser3"
 
     # Sample emails
     local email_content1="Return-Path: <joaquin@foo.pdc>\r\n
