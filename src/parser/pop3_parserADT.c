@@ -347,8 +347,6 @@ int retr_action(struct Connection *conn, char *argument)
     else
     {
         // Open the file for reading
-        log_message(logger, INFO, COMMAND_HANDLER, " FILE PATH %s", filePath);
-
         FILE *file = fopen(filePath, "r");
         if (file == NULL)
         {
@@ -364,16 +362,41 @@ int retr_action(struct Connection *conn, char *argument)
         log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Printing mail data to client");
 
         // reads the file and sends it to the client
-        char buffer[BUFFER_SIZE];
 
-        while (fgets(buffer, sizeof(buffer), file) != NULL)
+        char *buffer = NULL; // Dynamic buffer
+        size_t buffer_size = 0;
+        size_t buffer_capacity = 0;
+
+        char line[BUFFER_SIZE];
+
+        // Read lines until the end of the file
+        while (fgets(line, sizeof(line), file) != NULL)
         {
+            size_t bytesRead = strlen(line);
+
+            // Allocate or resize the buffer if needed
+            if (buffer_size + bytesRead >= buffer_capacity)
+            {
+                buffer_capacity += BUFFER_SIZE;
+                buffer = realloc(buffer, buffer_capacity);
+                if (buffer == NULL)
+                {
+                    perror("Error reallocating memory");
+                    fclose(file);
+                    free(buffer);
+                    return 1;
+                }
+            }
+
+            // Copy the line to the buffer
+            strcpy(buffer + buffer_size, line);
+            buffer_size += bytesRead;
+
             // Check for lines ending with '\r\n.\r\n'
-            size_t bytesRead = strlen(buffer);
-            char *line = buffer;
+            char *line_ptr = buffer;
             char *nextLine;
 
-            while ((nextLine = strstr(line, "\r\n")) != NULL)
+            while ((nextLine = strstr(line_ptr, "\r\n")) != NULL)
             {
                 nextLine += 2; // Move past the CRLF
 
@@ -386,16 +409,12 @@ int retr_action(struct Connection *conn, char *argument)
                 }
 
                 // Send the modified line to the client
-                send_n_data(line, nextLine - line, &conn->info_write_buff, conn);
-
-                // Move to the next line
-                line = nextLine;
+                line_ptr = nextLine;
             }
-
-            // Send the remaining data after byte stuffing
-            send_n_data(line, bytesRead - (line - buffer), &conn->info_write_buff, conn);
         }
+        send_n_data(buffer, buffer_size - 1, &conn->info_write_buff, conn);
 
+        free(buffer);
         log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Mail data printed to client");
 
         // closes file

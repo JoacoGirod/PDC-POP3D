@@ -1,0 +1,13 @@
+Return-Path: <joaquin@foo.pdc>
+X-Original-To: joaquin@foo.pdc
+Delivered-To: joaquin@foo.pdc
+Received: from joaquin (localhost [127.0.0.1])
+	by joaquin.foo.pdc (Postfix) with ESMTP id B6F7217E87A
+	for <joaquin@foo.pdc>; Thu, 23 Nov 2023 00:05:12 -0300 (-03)
+Message-Id: 950124.162336@example.com
+Subject: Carpe Diem
+from: joaquingirod@gmail.com 
+to: jgirod@itba.edu.ar
+Date: Thu, 23 Nov 2023 00:05:12 -0300 (-03)
+
+Quam minimum credula postero
