@@ -185,6 +185,123 @@ int list_action(struct Connection *conn, char *argument)
 // ----------------------------------------------------------------------------------
 // ----------------------------------------------------------------------------------
 
+int transform_completion(struct Connection *conn, char *filePath, struct Mail *mail)
+{
+    // Create a pipe for communication between parent and child
+    Logger *logger = conn->logger;
+    struct GlobalConfiguration *g_conf = get_global_configuration();
+    int pipe_fd[2];
+    if (pipe(pipe_fd) == -1)
+    {
+        perror("Pipe creation failed");
+        return -1;
+    }
+
+    // Fork the process
+    pid_t child_pid = fork();
+
+    if (child_pid == -1)
+    {
+        perror("Fork failed");
+        close(pipe_fd[0]);
+        close(pipe_fd[1]);
+        return -1;
+    }
+
+    if (child_pid == 0) // Child process
+    {
+        log_message(logger, DEBUG, COMMAND_HANDLER, " Im a happy child!");
+
+        // Close the writing end of the pipe
+        close(pipe_fd[1]);
+
+        // Redirect stdin to the reading end of the pipe
+        dup2(pipe_fd[0], STDIN_FILENO);
+
+        // Redirect stdout to the socket
+        dup2(conn->fd, STDOUT_FILENO);
+
+        // Close unused file descriptors
+        close(pipe_fd[0]);
+        close(conn->fd);
+
+        // Execute the transformation program
+        execl("/bin/sh", "sh", "-c", g_conf->transformation_script, (char *)NULL);
+
+        // If execl fails
+        perror("execl failed");
+        exit(EXIT_FAILURE);
+    }
+    else // Parent process
+    {
+        log_message(logger, DEBUG, COMMAND_HANDLER, " Im a sad parent!");
+
+        // Close the reading end of the pipe
+        close(pipe_fd[0]);
+
+        // Open the file for reading
+        FILE *file = fopen(filePath, "r");
+        log_message(logger, ERROR, COMMAND_HANDLER, " FILE PATH %s", filePath);
+        if (file == NULL)
+        {
+            log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: Error opening mail file");
+            return -1;
+        }
+
+        // Read from the file and write to the transformation program
+        char buffer[BUFFER_SIZE];
+        while (fgets(buffer, sizeof(buffer), file) != NULL)
+        {
+            log_message(logger, DEBUG, COMMAND_HANDLER, " Sending Information!");
+
+            // Check for lines ending with '\r\n.\r\n'
+            size_t bytesRead = strlen(buffer);
+            char *line = buffer;
+            char *nextLine;
+
+            while ((nextLine = strstr(line, "\r\n")) != NULL)
+            {
+                nextLine += 2; // Move past the CRLF
+
+                // Check if the line ends with '\r\n.\r\n'
+                if (nextLine[0] == '.' && nextLine[1] == '\r' && nextLine[2] == '\n' &&
+                    (nextLine[3] == '\r' || nextLine[3] == '\n' || nextLine[3] == '\0'))
+                {
+                    // Byte-stuff the line
+                    memmove(nextLine + 1, nextLine, strlen(nextLine) + 1);
+                    nextLine[0] = '.';
+                }
+
+                // Send the modified line to the transformation program
+                write(pipe_fd[1], line, nextLine - line);
+
+                // Move to the next line
+                line = nextLine;
+            }
+
+            // Send the remaining data after byte stuffing
+            write(pipe_fd[1], line, bytesRead - (line - buffer));
+        }
+
+        // Close the writing end of the pipe to signal the end of input to the child
+        close(pipe_fd[1]);
+
+        // Wait for the child to finish
+        int status;
+        waitpid(child_pid, &status, 0);
+
+        // Close the file
+        fclose(file);
+
+        // marks mail as RETRIEVED
+        mail->status = RETRIEVED;
+        log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Mail marked as RETRIEVED");
+
+        send_data(DOT_RESPONSE, &conn->info_write_buff, conn);
+    }
+    return 0;
+}
+
 int retr_action(struct Connection *conn, char *argument)
 {
     Logger *logger = conn->logger;
@@ -233,115 +350,11 @@ int retr_action(struct Connection *conn, char *argument)
     if (g_conf->transformation)
     {
         log_message(logger, DEBUG, COMMAND_HANDLER, " Transformacion!");
-        // Create a pipe for communication between parent and child
-        int pipe_fd[2];
-        if (pipe(pipe_fd) == -1)
+
+        if (transform_completion(conn, filePath, mail) == -1)
         {
-            perror("Pipe creation failed");
+            log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: Error transforming mail");
             return -1;
-        }
-
-        // Fork the process
-        pid_t child_pid = fork();
-
-        if (child_pid == -1)
-        {
-            perror("Fork failed");
-            close(pipe_fd[0]);
-            close(pipe_fd[1]);
-            return -1;
-        }
-
-        if (child_pid == 0) // Child process
-        {
-            log_message(logger, DEBUG, COMMAND_HANDLER, " Im a happy child!");
-
-            // Close the writing end of the pipe
-            close(pipe_fd[1]);
-
-            // Redirect stdin to the reading end of the pipe
-            dup2(pipe_fd[0], STDIN_FILENO);
-
-            // Redirect stdout to the socket
-            dup2(conn->fd, STDOUT_FILENO);
-
-            // Close unused file descriptors
-            close(pipe_fd[0]);
-            close(conn->fd);
-
-            // Execute the transformation program
-            execl("/bin/sh", "sh", "-c", g_conf->transformation_script, (char *)NULL);
-
-            // If execl fails
-            perror("execl failed");
-            exit(EXIT_FAILURE);
-        }
-        else // Parent process
-        {
-            log_message(logger, DEBUG, COMMAND_HANDLER, " Im a sad parent!");
-
-            // Close the reading end of the pipe
-            close(pipe_fd[0]);
-
-            // Open the file for reading
-            FILE *file = fopen(filePath, "r");
-            log_message(logger, ERROR, COMMAND_HANDLER, " FILE PATH %s", filePath);
-            if (file == NULL)
-            {
-                log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: Error opening mail file");
-                return -1;
-            }
-
-            // Read from the file and write to the transformation program
-            char buffer[BUFFER_SIZE];
-            while (fgets(buffer, sizeof(buffer), file) != NULL)
-            {
-                log_message(logger, DEBUG, COMMAND_HANDLER, " Sending Information!");
-
-                // Check for lines ending with '\r\n.\r\n'
-                size_t bytesRead = strlen(buffer);
-                char *line = buffer;
-                char *nextLine;
-
-                while ((nextLine = strstr(line, "\r\n")) != NULL)
-                {
-                    nextLine += 2; // Move past the CRLF
-
-                    // Check if the line ends with '\r\n.\r\n'
-                    if (nextLine[0] == '.' && nextLine[1] == '\r' && nextLine[2] == '\n' &&
-                        (nextLine[3] == '\r' || nextLine[3] == '\n' || nextLine[3] == '\0'))
-                    {
-                        // Byte-stuff the line
-                        memmove(nextLine + 1, nextLine, strlen(nextLine) + 1);
-                        nextLine[0] = '.';
-                    }
-
-                    // Send the modified line to the transformation program
-                    write(pipe_fd[1], line, nextLine - line);
-
-                    // Move to the next line
-                    line = nextLine;
-                }
-
-                // Send the remaining data after byte stuffing
-                write(pipe_fd[1], line, bytesRead - (line - buffer));
-            }
-
-            // Close the writing end of the pipe to signal the end of input to the child
-            close(pipe_fd[1]);
-
-            // Wait for the child to finish
-            int status;
-            waitpid(child_pid, &status, 0);
-
-            // Close the file
-            fclose(file);
-
-            // marks mail as RETRIEVED
-            mail->status = RETRIEVED;
-            log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Mail marked as RETRIEVED");
-
-            send_data(DOT_RESPONSE, &conn->info_write_buff, conn);
         }
     }
     else

@@ -36,16 +36,6 @@ void retrieve_emails_from_directory(const char *user_path, const char *dir_name,
 
                 // Add the mail to the user's mailbox
                 conn->mails[conn->num_emails++] = mail;
-
-                // Process the mail or store it as needed
-                // (You can add your logic here)
-
-                // Print information about the mail
-                printf("Mail Index: %d\n", mail.index);
-                printf("Mail Octets: %lu\n", mail.octets);
-                printf("Mail Filename: %s\n", mail.filename);
-                printf("Mail Folder: %s\n", mail.folder);
-                printf("Mail Status: %d\n", mail.status);
             }
             else
             {

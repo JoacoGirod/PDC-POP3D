@@ -14,5 +14,6 @@ server:
 clean:
 	cd $(SERVER_DIRECTORY); make clean
 	rm -f $(SERVER_NAME)
+	rm -f $(LOG_DIRECTORY)/*.log
 
 .PHONY: all clean server
