@@ -212,7 +212,7 @@ int retr_action(struct Connection *conn, char *argument)
     // gets the email index and subtracts 1 because mails are numbered
     size_t mailIndex = atoi(argument) - 1;
     // checks if the emailIndex is valid
-    if (mailIndex > conn->num_emails)
+    if (mailIndex >= conn->num_emails)
     {
         // invalid email index
         send_data(ERR_INVALID_EMAIL_INDEX_RESPONSE, &conn->info_write_buff, conn);
@@ -436,7 +436,7 @@ int dele_action(struct Connection *conn, char *argument)
     size_t mailIndex = atoi(argument) - 1;
 
     // checks if the emailIndex is valid
-    if (mailIndex > conn->num_emails)
+    if (mailIndex >= conn->num_emails)
     {
         // invalid email index
         send_data(ERR_INVALID_EMAIL_INDEX_RESPONSE, &conn->info_write_buff, conn);
