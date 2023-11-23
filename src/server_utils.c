@@ -138,7 +138,7 @@ void pop3_handle_connection(struct Connection *conn)
 
             if (totalBytesRead > MAX_COMMAND_LENGTH)
             {
-                log_message(conn->logger, ERROR, THREADMAINHANDLER, "Received command exceeds the maximum allowed length");
+                log_message(conn->logger, ERROR, THREADMAINHANDLER, "Received command exceeds the maximum allowed length, length : %d", totalBytesRead);
                 send_data("-ERR Command exceds buffer size\r\n", &conn->info_write_buff, conn);
                 error = true;
                 break;

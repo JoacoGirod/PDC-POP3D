@@ -37,6 +37,7 @@ static void log_global_configuration(Logger *main_logger)
     log_message(main_logger, INFO, SETUP, "Configuration Service Address (UDP) : %s", global_config_instance->conf_addr);
     log_message(main_logger, INFO, SETUP, "Configuration Service Port (UDP) : %d", global_config_instance->conf_port);
     log_message(main_logger, INFO, SETUP, "Users Registered (%d):", global_config_instance->numUsers);
+    log_message(main_logger, INFO, SETUP, "Transformation Script (%s):", global_config_instance->transformation_script);
     for (int i = 0; i < MAX_USER_SIZE; i++)
         log_message(main_logger, INFO, SETUP, "%s", global_config_instance->users[i].name);
 }

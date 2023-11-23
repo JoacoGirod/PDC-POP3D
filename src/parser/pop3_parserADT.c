@@ -22,6 +22,7 @@
 #define ERR_DEFAULT_ACTION "-ERR Command not found.\r\n"
 #define ERR_NO_USERNAME_GIVEN_RESPONSE "-ERR No username given.\r\n"
 #define DOT_RESPONSE "\r\n.\r\n"
+#define SIMPLE_DOT_RESPONSE ".\r\n"
 
 // aux function for STAT command action
 size_t calculate_total_email_bytes(struct Connection *conn)
@@ -170,11 +171,19 @@ int list_action(struct Connection *conn, char *argument)
     }
 
     // sends termination line
-    send_data(DOT_RESPONSE, &conn->info_write_buff, conn);
+    send_data(SIMPLE_DOT_RESPONSE, &conn->info_write_buff, conn);
     log_message(logger, INFO, COMMAND_HANDLER, " - LIST: List action finished");
 
     return 0;
 }
+
+// ----------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------
 
 int retr_action(struct Connection *conn, char *argument)
 {
@@ -187,9 +196,6 @@ int retr_action(struct Connection *conn, char *argument)
         log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: RETR command in AUTHORIZATION state forbidden");
         return -1;
     }
-
-    log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Retr action started");
-
     // Check if the argument is a valid number
     size_t len = strlen(argument);
     size_t digit_len = strspn(argument, "0123456789");
@@ -201,6 +207,8 @@ int retr_action(struct Connection *conn, char *argument)
         log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: Noise after message number: %s", argument);
         return 1;
     }
+    log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Retr action started");
+
     // gets the email index and subtracts 1 because mails are numbered
     size_t mailIndex = atoi(argument) - 1;
     // checks if the emailIndex is valid
@@ -216,113 +224,131 @@ int retr_action(struct Connection *conn, char *argument)
 
     // constructs file path for the email to open
     char filePath[MAX_FILE_PATH];
-    size_t buffer_size = sizeof(g_conf->maildir_folder) + sizeof(conn->username) + sizeof(mail->folder) + sizeof(mail->filename) + 3;
-
-    //    /rootdir/username/maildir/mailfolder/filename
+    size_t buffer_size = strlen(g_conf->maildir_folder) + strlen(g_conf->maildir_folder) + strlen(conn->username) + strlen(mail->folder) + strlen(mail->filename) + 4;
     snprintf(filePath, buffer_size, "%s/%s/%s/%s/%s", g_conf->mailroot_folder, conn->username, g_conf->maildir_folder, mail->folder, mail->filename);
+
+    // ---------------------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------
 
     if (g_conf->transformation)
     {
-        // Create pipes for communication between parent and child
+        log_message(logger, DEBUG, COMMAND_HANDLER, " Transformacion!");
+        // Create a pipe for communication between parent and child
         int pipe_fd[2];
         if (pipe(pipe_fd) == -1)
         {
-            log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: Error creating pipe");
+            perror("Pipe creation failed");
             return -1;
         }
 
         // Fork the process
-        pid_t pid = fork();
-        if (pid == -1)
+        pid_t child_pid = fork();
+
+        if (child_pid == -1)
         {
-            log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: Error forking process");
+            perror("Fork failed");
             close(pipe_fd[0]);
             close(pipe_fd[1]);
             return -1;
         }
 
-        if (pid > 0) // Parent process
+        if (child_pid == 0) // Child process
         {
-            close(pipe_fd[1]); // Close write end of the pipe
+            log_message(logger, DEBUG, COMMAND_HANDLER, " Im a happy child!");
 
-            // sends initial response
-            char initial[MAX_RESPONSE_LENGTH];
-            size_t initialLength = sprintf(initial, "+OK %zu octets\r\n", mail->octets);
-            send_n_data(initial, initialLength, &conn->info_write_buff, conn);
+            // Close the writing end of the pipe
+            close(pipe_fd[1]);
 
-            char buffer[BUFFER_SIZE];
-            size_t bytesRead;
+            // Redirect stdin to the reading end of the pipe
+            dup2(pipe_fd[0], STDIN_FILENO);
 
-            log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Printing mail data to client");
+            // Redirect stdout to the socket
+            dup2(conn->fd, STDOUT_FILENO);
 
-            // Read from the pipe and send to the client with byte stuffing
-            while ((bytesRead = read(pipe_fd[0], buffer, sizeof(buffer))) > 0)
+            // Close unused file descriptors
+            close(pipe_fd[0]);
+            close(conn->fd);
+
+            // Execute the transformation program
+            execl("/bin/sh", "sh", "-c", g_conf->transformation_script, (char *)NULL);
+
+            // If execl fails
+            perror("execl failed");
+            exit(EXIT_FAILURE);
+        }
+        else // Parent process
+        {
+            log_message(logger, DEBUG, COMMAND_HANDLER, " Im a sad parent!");
+
+            // Close the reading end of the pipe
+            close(pipe_fd[0]);
+
+            // Open the file for reading
+            FILE *file = fopen(filePath, "r");
+            log_message(logger, ERROR, COMMAND_HANDLER, " FILE PATH %s", filePath);
+            if (file == NULL)
             {
-                // Check for lines starting with the termination octet
+                log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: Error opening mail file");
+                return -1;
+            }
+
+            // Read from the file and write to the transformation program
+            char buffer[BUFFER_SIZE];
+            while (fgets(buffer, sizeof(buffer), file) != NULL)
+            {
+                log_message(logger, DEBUG, COMMAND_HANDLER, " Sending Information!");
+
+                // Check for lines ending with '\r\n.\r\n'
+                size_t bytesRead = strlen(buffer);
                 char *line = buffer;
                 char *nextLine;
+
                 while ((nextLine = strstr(line, "\r\n")) != NULL)
                 {
                     nextLine += 2; // Move past the CRLF
 
-                    // Check if the line starts with the termination octet
-                    if (nextLine[0] == '.' && (nextLine[1] == '\r' || nextLine[1] == '\n' || nextLine[1] == '\0'))
+                    // Check if the line ends with '\r\n.\r\n'
+                    if (nextLine[0] == '.' && nextLine[1] == '\r' && nextLine[2] == '\n' &&
+                        (nextLine[3] == '\r' || nextLine[3] == '\n' || nextLine[3] == '\0'))
                     {
                         // Byte-stuff the line
                         memmove(nextLine + 1, nextLine, strlen(nextLine) + 1);
                         nextLine[0] = '.';
                     }
 
-                    // Send the modified line to the client
-                    send_n_data(line, nextLine - line, &conn->info_write_buff, conn);
+                    // Send the modified line to the transformation program
+                    write(pipe_fd[1], line, nextLine - line);
 
                     // Move to the next line
                     line = nextLine;
                 }
 
                 // Send the remaining data after byte stuffing
-                send_n_data(line, bytesRead - (line - buffer), &conn->info_write_buff, conn);
+                write(pipe_fd[1], line, bytesRead - (line - buffer));
             }
 
-            log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Mail data printed to client");
+            // Close the writing end of the pipe to signal the end of input to the child
+            close(pipe_fd[1]);
+
+            // Wait for the child to finish
+            int status;
+            waitpid(child_pid, &status, 0);
+
+            // Close the file
+            fclose(file);
 
             // marks mail as RETRIEVED
             mail->status = RETRIEVED;
             log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Mail marked as RETRIEVED");
 
             send_data(DOT_RESPONSE, &conn->info_write_buff, conn);
-
-            close(pipe_fd[0]); // Close read end of the pipe
-
-            // Wait for the child to finish
-            wait(NULL);
-        }
-        else // Child process
-        {
-            close(pipe_fd[0]); // Close read end of the pipe
-
-            // Redirect stdout to the write end of the pipe
-            dup2(pipe_fd[1], STDOUT_FILENO);
-            close(pipe_fd[1]); // Close write end of the pipe
-
-            // Execute the transformation program (in this case, /bin/cat)
-            // char *transformation_program = "/bin/cat";
-            char *transformation_program = g_conf->transformation_script;
-            char *const paramList[] = {transformation_program, filePath, NULL};
-            if (execve(transformation_program, paramList, NULL) == -1)
-            {
-                log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: execvpe failed in child process");
-                exit(EXIT_FAILURE);
-            }
-
-            // The code below is unreachable if execve is successful
-            log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: Unreachable code in child process");
-            exit(EXIT_FAILURE);
         }
     }
     else
     {
         // Open the file for reading
+        log_message(logger, INFO, COMMAND_HANDLER, " FILE PATH %s", filePath);
+
         FILE *file = fopen(filePath, "r");
         if (file == NULL)
         {
@@ -382,9 +408,18 @@ int retr_action(struct Connection *conn, char *argument)
         send_data(DOT_RESPONSE, &conn->info_write_buff, conn);
     }
 
+    // ---------------------------------------------------------------------------------------
+    // ---------------------------------------------------------------------------------------
+
     log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Retr action finished");
     return 0;
 }
+
+// ----------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------
 
 // sets specific Mail to state DELETED
 int dele_action(struct Connection *conn, char *argument)
