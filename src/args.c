@@ -9,6 +9,7 @@ port(const char *s)
 
     if (end == s || '\0' != *end || ((LONG_MIN == sl || LONG_MAX == sl) && ERANGE == errno) || sl < 0 || sl > USHRT_MAX)
     {
+        fprintf(stderr, "Port should in in the range of 1-65536: %s\n", s);
         exit(1);
         return 1;
     }
@@ -90,7 +91,7 @@ void parse_args(const int argc, char **argv, Logger *logger)
             {"maildir", required_argument, 0, 'd'},
             {"transformation", required_argument, 0, 't'}};
 
-        c = getopt_long(argc, argv, "hl:L:Np:P:u:v:t:d:", long_options, &option_index);
+        c = getopt_long(argc, argv, "hl:L:Np:P:u:vl:t:d:", long_options, &option_index);
         if (c == -1)
             break;
 
