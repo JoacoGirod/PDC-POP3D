@@ -1,10 +1,10 @@
 # Trabajo Practico - Protocolos de Comunicacion - POP3D
 
-> [!Integrantes]
-> Bengolea, Iñaki
-> Girod, Joaquin
-> Ijjas, Christian
-> Menardi, Felix Lopez
+## Integrantes grupo 13
+- Bengolea, Iñaki
+- Girod, Joaquin
+- Ijjas, Christian
+- Menardi, Felix Lopez
 
 # Información del proyecto
 
