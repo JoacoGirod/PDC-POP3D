@@ -124,7 +124,7 @@ int setmdf_action(char *argument, Logger *logger, const pUDPClientInfo client_in
 }
 int setatt_action(char *argument, Logger *logger, const pUDPClientInfo client_info, struct GlobalConfiguration *g_conf, struct GlobalStatistics *g_stats)
 {
-    if (strlen(argument) - 1 != 10)
+    if (strlen(argument) != 10)
     {
         send_data_udp(logger, client_info, ERR_AUTH_TOKEN_LENGTH);
     }

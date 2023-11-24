@@ -47,7 +47,7 @@ struct GlobalConfiguration
     char logs_folder[MAX_FILENAME_LENGTH];
     char mailroot_folder[MAX_FOLDERNAME_LENGTH];
     char maildir_folder[MAX_FOLDERNAME_LENGTH];
-    char authorization_token[AUTHTOKEN_LENGTH];
+    char authorization_token[AUTHTOKEN_LENGTH + 1];
     bool transformation;
     char transformation_script[MAX_TRANSFORMATION_SCRIPT_LENGTH];
 };
