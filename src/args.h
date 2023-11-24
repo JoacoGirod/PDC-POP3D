@@ -2,10 +2,10 @@
 #define ARGS_H
 
 #include <stdbool.h>
-#include <stdio.h>  /* for printf */
-#include <stdlib.h> /* for exit */
-#include <limits.h> /* LONG_MIN et al */
-#include <string.h> /* memset */
+#include <stdio.h>
+#include <stdlib.h>
+#include <limits.h>
+#include <string.h>
 #include <errno.h>
 #include <getopt.h>
 #include "logger.h"

@@ -20,6 +20,7 @@
     "stddef.h": "c",
     "ctype.h": "c",
     "parser_automaton.h": "c",
-    "server_utils.h": "c"
+    "server_utils.h": "c",
+    "getopt.h": "c"
   }
 }

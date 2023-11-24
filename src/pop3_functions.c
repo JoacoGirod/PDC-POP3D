@@ -11,6 +11,7 @@ void retrieve_emails(const char *user_path, struct Connection *conn)
 
 void retrieve_emails_from_directory(const char *user_path, const char *dir_name, struct Connection *conn)
 {
+    Logger *logger = conn->logger;
     char dir_path[MAX_PATH_LENGTH];
     snprintf(dir_path, MAX_PATH_LENGTH, "%s/%s", user_path, dir_name);
     DIR *dir = opendir(dir_path);
@@ -39,8 +40,8 @@ void retrieve_emails_from_directory(const char *user_path, const char *dir_name,
             }
             else
             {
+                log_message(logger, ERROR, SETUPPOP3, "Mailbox is full for user");
                 // Handle the case when the mailbox is full
-                fprintf(stderr, "Mailbox is full for user\n");
                 break;
             }
         }
@@ -97,12 +98,11 @@ int delete_file(const char *file_path)
     // Attempt to delete the file
     if (remove(file_path) == 0)
     {
-        printf("File deleted successfully: %s\n", file_path);
         return 0; // Success
     }
     else
     {
-        perror("Error deleting file");
+        fprintf(stderr, "Error deleting file: %s\n", file_path);
         return -1; // Failure
     }
 }
@@ -112,7 +112,7 @@ int move_file(const char *source_path, const char *dest_path)
     // Ensure the source directory exists
     if (access(source_path, F_OK) != 0)
     {
-        perror("Source directory doesn't exist");
+        fprintf(stderr, "Source file doesn't exist: %s\n", source_path);
         return -1; // Failure
     }
 
@@ -121,7 +121,7 @@ int move_file(const char *source_path, const char *dest_path)
     {
         if (mkdir(dest_path, RD_WR_EXE) != 0)
         {
-            perror("Error creating destination directory");
+            fprintf(stderr, "Error creating destination directory: %s\n", dest_path);
             return -1; // Failure
         }
     }
@@ -148,7 +148,7 @@ int move_file(const char *source_path, const char *dest_path)
     }
     else
     {
-        perror("Error moving file");
+        fprintf(stderr, "Error moving file: %s\n", source_path);
         return -1; // Failure
     }
 }

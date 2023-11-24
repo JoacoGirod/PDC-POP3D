@@ -38,8 +38,7 @@ static void *config_parser_init(void);
 static void config_parser_reset(void *data);
 static void config_parser_destroy(void *data);
 
-// Parser condition functions
-
+// Parser getter functions
 void get_config_token(parserADT p, char *buff, int max)
 {
     config_parser_data *d = (config_parser_data *)p->data;
@@ -78,7 +77,6 @@ void get_config_argument(parserADT p, char *buff, int max)
 // Parser action functions
 static parser_state token_action(void *data, uint8_t c)
 {
-    printf("token_action '%c'\n", c);
     config_parser_data *d = (config_parser_data *)data;
     if (d->token_length < 10)
     {
@@ -90,7 +88,6 @@ static parser_state token_action(void *data, uint8_t c)
 
 static parser_state operation_action(void *data, uint8_t c)
 {
-    printf("operation_action '%c'\n", c);
     config_parser_data *d = (config_parser_data *)data;
     if (d->operation_length < 3)
     {
@@ -102,7 +99,6 @@ static parser_state operation_action(void *data, uint8_t c)
 
 static parser_state object_code_action(void *data, uint8_t c)
 {
-    printf("object_code_action '%c'\n", c);
     config_parser_data *d = (config_parser_data *)data;
     if (d->object_code_length < 3)
     {
@@ -114,7 +110,6 @@ static parser_state object_code_action(void *data, uint8_t c)
 
 static parser_state argument_action(void *data, uint8_t c)
 {
-    printf("argument_action '%c'\n", c);
     config_parser_data *d = (config_parser_data *)data;
     if (d->argument_length < sizeof(d->argument) - 1)
     {
@@ -126,19 +121,16 @@ static parser_state argument_action(void *data, uint8_t c)
 
 static parser_state end_action(void *data, uint8_t c)
 {
-    printf("end_action '%c'\n", c);
     return PARSER_FINISHED;
 }
 
 static parser_state def_action(void *data, uint8_t c)
 {
-    printf("def_action '%c'\n", c);
     return PARSER_READING;
 }
 
 static parser_state err_action(void *data, uint8_t c)
 {
-    printf("err_action '%c'\n", c);
     return PARSER_ERROR;
 }
 

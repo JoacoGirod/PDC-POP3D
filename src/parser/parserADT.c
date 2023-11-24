@@ -19,7 +19,7 @@ parserADT parser_init(const parser_automaton *def)
     parserADT p = calloc(1, sizeof(parserCDT));
     if (p == NULL || errno == ENOMEM)
     {
-        printf("Error creating parserADT");
+        fprintf(stderr, "Error allocating memory for parser\n");
         return NULL;
     }
     if (def->init != NULL)
@@ -27,7 +27,7 @@ parserADT parser_init(const parser_automaton *def)
         p->data = def->init();
         if (p->data == NULL)
         {
-            printf("Error initializing parser data structure");
+            fprintf(stderr, "Error initializing parser data\n");
             free(p);
             return NULL;
         }

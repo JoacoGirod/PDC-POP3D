@@ -9,7 +9,6 @@ port(const char *s)
 
     if (end == s || '\0' != *end || ((LONG_MIN == sl || LONG_MAX == sl) && ERANGE == errno) || sl < 0 || sl > USHRT_MAX)
     {
-        fprintf(stderr, "Port should in in the range of 1-65536: %s\n", s);
         exit(1);
         return 1;
     }

@@ -164,7 +164,7 @@ static void *pop3_parser_init(void)
     pop3_parser_data *data = calloc(1, sizeof(pop3_parser_data));
     if (data == NULL || errno == ENOMEM)
     {
-        printf("Unable to allocate memory for pop3_parser_data");
+        fprintf(stderr, "Error allocating memory for pop3_parser_data\n");
         return NULL;
     }
     data->cmd_length = 0;
@@ -179,7 +179,7 @@ static void *pop3_parser_copy(void *data)
     pop3_parser_data *copy = calloc(1, sizeof(pop3_parser_data));
     if (copy == NULL || errno == ENOMEM)
     {
-        printf("Unable to copy pop3_parser_data");
+        fprintf(stderr, "Error allocating memory for pop3_parser_data\n");
         return NULL;
     }
     copy->cmd_length = d->cmd_length;
