@@ -14,6 +14,7 @@
 #define OK_CAPA_MESSAGE "+OK\r\nCAPA\r\nUSER\r\nPIPELINING\r\n.\r\n"
 #define OK_CAPA_AUTHORIZED_MESSAGE "+OK\r\nCAPA\r\nUSER\r\nPIPELINING\r\n.\r\n"
 #define OK_PERMISSION_GRANTED "+OK Waitings up! Permission granted.\r\n"
+#define MAX_LINE_SIZE 2048 // Adjust the size as needed
 
 #define ERR_RESPONSE "-ERR\r\n"
 #define ERR_AUTH_RESPONSE "-ERR [AUTH] Authentication failed.\r\n"
@@ -264,37 +265,31 @@ int transform_completion(struct Connection *conn, char *filePath, struct Mail *m
             return -1;
         }
 
-        // Read from the file and write to the transformation program with byte stuffing
         char buffer[BUFFER_SIZE];
-        while (fgets(buffer, sizeof(buffer), file) != NULL)
+        size_t bytesRead = 0;
+        while ((bytesRead = fread(buffer, 1, sizeof(buffer), file)) > 0)
         {
-            // Check for lines ending with '\r\n.\r\n'
-            size_t bytesRead = strlen(buffer);
-            char *line = buffer;
-            char *nextLine;
-
-            while ((nextLine = strstr(line, "\r\n")) != NULL)
+            // Handle byte stuffing for \r\n.\r\n terminations
+            size_t i = 0;
+            while (i < bytesRead)
             {
-                nextLine += 2; // Move past the CRLF
-
-                // Check if the line ends with '\r\n.\r\n'
-                if (nextLine[0] == '.' && nextLine[1] == '\r' && nextLine[2] == '\n' &&
-                    (nextLine[3] == '\r' || nextLine[3] == '\n' || nextLine[3] == '\0'))
+                if (buffer[i] == '.' && (i == 0 || buffer[i - 1] == '\n'))
                 {
-                    // Byte-stuff the line
-                    memmove(nextLine + 1, nextLine, strlen(nextLine) + 1);
-                    nextLine[0] = '.';
+                    // Byte-stuffing: prepend an extra '.'
+                    write(pipe_fd[1], ".", 1);
                 }
 
-                // Send the modified line to the transformation program
-                write(pipe_fd[1], line, nextLine - line);
+                // Send the current character
+                write(pipe_fd[1], &buffer[i], 1);
 
-                // Move to the next line
-                line = nextLine;
+                if (buffer[i] == '\n' && (i == 0 || buffer[i - 1] != '\r'))
+                {
+                    // Send the carriage return for lines that end with '\n'
+                    write(pipe_fd[1], "\r", 1);
+                }
+
+                i++;
             }
-
-            // Send the remaining data after byte stuffing
-            write(pipe_fd[1], line, bytesRead - (line - buffer));
         }
 
         // Close the writing end of the pipe to signal the end of input to the child
@@ -389,101 +384,33 @@ int retr_action(struct Connection *conn, char *argument)
         send_n_data(initial, initialLength, &conn->info_write_buff, conn);
 
         log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Printing mail data to client");
-        if (mail->octets > MAX_BYTES)
+
+        // reads the file and sends it to the client
+        char buffer[BUFFER_SIZE];
+        size_t bytesRead = 0;
+        while ((bytesRead = fread(buffer, 1, sizeof(buffer), file)) > 0)
         {
-            log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Tretating mail as large");
-
-            // reads the file and sends it to the client
-            char buffer[BUFFER_SIZE];
-
-            while (fgets(buffer, sizeof(buffer), file) != NULL)
+            // Handle byte stuffing for \r\n.\r\n terminations
+            size_t i = 0;
+            while (i < bytesRead)
             {
-                // Check for lines ending with '\r\n.\r\n'
-                size_t bytesRead = strlen(buffer);
-                char *line = buffer;
-                char *nextLine;
-
-                while ((nextLine = strstr(line, "\r\n")) != NULL)
+                if (buffer[i] == '.' && (i == 0 || buffer[i - 1] == '\n'))
                 {
-                    nextLine += 2; // Move past the CRLF
-
-                    // Check if the line ends with '\r\n.\r\n'
-                    if (nextLine[0] == '.' && nextLine[1] == '\r' && nextLine[2] == '\n' && (nextLine[3] == '\r' || nextLine[3] == '\n' || nextLine[3] == '\0'))
-                    {
-                        // Byte-stuff the line
-                        memmove(nextLine + 1, nextLine, strlen(nextLine) + 1);
-                        nextLine[0] = '.';
-                    }
-
-                    // Send the modified line to the client
-                    send_n_data(line, nextLine - line, &conn->info_write_buff, conn);
-
-                    // Move to the next line
-                    line = nextLine;
+                    // Byte-stuffing: prepend an extra '.'
+                    send_n_data(".", 1, &conn->info_write_buff, conn);
                 }
 
-                // Send the remaining data after byte stuffing
-                send_n_data(line, bytesRead - (line - buffer), &conn->info_write_buff, conn);
+                // Send the current character
+                send_n_data(&buffer[i], 1, &conn->info_write_buff, conn);
+
+                if (buffer[i] == '\n' && (i == 0 || buffer[i - 1] != '\r'))
+                {
+                    // Send the carriage return for lines that end with '\n'
+                    send_n_data("\r", 1, &conn->info_write_buff, conn);
+                }
+
+                i++;
             }
-        }
-        else // NO TRANSFORMATIONS
-        {
-
-            // reads the file and sends it to the client
-
-            char *buffer = NULL; // Dynamic buffer
-            size_t buffer_size = 0;
-            size_t buffer_capacity = 0;
-
-            char line[MAX_BYTES];
-
-            // Read lines until the end of the file
-            while (fgets(line, sizeof(line), file) != NULL)
-            {
-                size_t bytesRead = strlen(line);
-
-                // Allocate or resize the buffer if needed
-                if (buffer_size + bytesRead >= buffer_capacity)
-                {
-                    buffer_capacity += MAX_BYTES;
-                    buffer = realloc(buffer, buffer_capacity);
-                    if (buffer == NULL)
-                    {
-                        perror("Error reallocating memory");
-                        fclose(file);
-                        free(buffer);
-                        return 1;
-                    }
-                }
-
-                // Copy the line to the buffer
-                strcpy(buffer + buffer_size, line);
-                buffer_size += bytesRead;
-
-                // Check for lines ending with '\r\n.\r\n'
-                char *line_ptr = buffer;
-                char *nextLine;
-
-                while ((nextLine = strstr(line_ptr, "\r\n")) != NULL)
-                {
-                    nextLine += 2; // Move past the CRLF
-
-                    // Check if the line ends with '\r\n.\r\n'
-                    if (nextLine[0] == '.' && nextLine[1] == '\r' && nextLine[2] == '\n' && (nextLine[3] == '\r' || nextLine[3] == '\n' || nextLine[3] == '\0'))
-                    {
-                        // Byte-stuff the line
-                        memmove(nextLine + 1, nextLine, strlen(nextLine) + 1);
-                        nextLine[0] = '.';
-                    }
-
-                    // Send the modified line to the client
-                    line_ptr = nextLine;
-                }
-            }
-            buffer[buffer_size - 1] = '\0';
-            send_n_data(buffer, buffer_size - 1, &conn->info_write_buff, conn);
-
-            free(buffer);
         }
         log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Mail data printed to client");
 
