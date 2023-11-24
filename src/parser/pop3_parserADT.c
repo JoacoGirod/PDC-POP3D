@@ -792,8 +792,9 @@ int parse_input(const uint8_t *input, struct Connection *conn)
         }
         else if (result == PARSER_ERROR)
         {
+            send_data(ERR_UNKNOWN_COMMAND_RESPONSE, &conn->info_write_buff, conn);
             log_message(conn->logger, ERROR, COMMANDPARSER, " - Parser error");
-            break;
+            return 0;
         }
     }
 

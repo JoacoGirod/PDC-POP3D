@@ -7,9 +7,25 @@
 // Definition of states
 enum config_states
 {
-    TOKEN,
-    OPERATION,
-    OBJECT_CODE,
+    INIT,
+    TOKEN_1,
+    TOKEN_2,
+    TOKEN_3,
+    TOKEN_4,
+    TOKEN_5,
+    TOKEN_6,
+    TOKEN_7,
+    TOKEN_8,
+    TOKEN_9,
+    TOKEN_10,
+    OPERATION_0,
+    OPERATION_1,
+    OPERATION_2,
+    OPERATION_3,
+    OBJECT_CODE_0,
+    OBJECT_CODE_1,
+    OBJECT_CODE_2,
+    OBJECT_CODE_3,
     ARGUMENT,
     MAYEND,
     ENDST,
@@ -62,8 +78,9 @@ void get_config_argument(parserADT p, char *buff, int max)
 // Parser action functions
 static parser_state token_action(void *data, uint8_t c)
 {
+    printf("token_action '%c'\n", c);
     config_parser_data *d = (config_parser_data *)data;
-    if (d->token_length < 10 && is_alphanumeric(c))
+    if (d->token_length < 10)
     {
         d->token[d->token_length++] = c;
         return PARSER_READING;
@@ -73,10 +90,11 @@ static parser_state token_action(void *data, uint8_t c)
 
 static parser_state operation_action(void *data, uint8_t c)
 {
+    printf("operation_action '%c'\n", c);
     config_parser_data *d = (config_parser_data *)data;
-    if (d->operation_length < 3 && is_letter(c))
+    if (d->operation_length < 3)
     {
-        d->operation[d->operation_length++] = toupper(c);
+        d->operation[d->operation_length++] = c;
         return PARSER_READING;
     }
     return PARSER_ERROR;
@@ -84,10 +102,11 @@ static parser_state operation_action(void *data, uint8_t c)
 
 static parser_state object_code_action(void *data, uint8_t c)
 {
+    printf("object_code_action '%c'\n", c);
     config_parser_data *d = (config_parser_data *)data;
-    if (d->object_code_length < 3 && is_letter(c))
+    if (d->object_code_length < 3)
     {
-        d->object_code[d->object_code_length++] = toupper(c); // Convert to uppercase
+        d->object_code[d->object_code_length++] = c; // Convert to uppercase
         return PARSER_READING;
     }
     return PARSER_ERROR;
@@ -95,8 +114,9 @@ static parser_state object_code_action(void *data, uint8_t c)
 
 static parser_state argument_action(void *data, uint8_t c)
 {
+    printf("argument_action '%c'\n", c);
     config_parser_data *d = (config_parser_data *)data;
-    if (d->argument_length < sizeof(d->argument) - 1 && is_any(c))
+    if (d->argument_length < sizeof(d->argument) - 1)
     {
         d->argument[d->argument_length++] = c;
         return PARSER_READING;
@@ -106,12 +126,20 @@ static parser_state argument_action(void *data, uint8_t c)
 
 static parser_state end_action(void *data, uint8_t c)
 {
+    printf("end_action '%c'\n", c);
     return PARSER_FINISHED;
 }
 
 static parser_state def_action(void *data, uint8_t c)
 {
+    printf("def_action '%c'\n", c);
     return PARSER_READING;
+}
+
+static parser_state err_action(void *data, uint8_t c)
+{
+    printf("err_action '%c'\n", c);
+    return PARSER_ERROR;
 }
 
 // Initialization function
@@ -165,45 +193,138 @@ static void config_parser_destroy(void *data)
     free(data);
 }
 
-static const struct parser_state_transition ST_TOKEN[] = {
-    {.when = is_alphanumeric, .dest = TOKEN, .action = token_action},
-    {.when = is_space, .dest = OPERATION, .action = def_action},
-    {.when = is_any, .dest = ERRST, .action = def_action},
+static const struct parser_state_transition ST_INIT[] = {
+    {.when = is_alphanumeric, .dest = TOKEN_1, .action = token_action},
+    {.when = is_lf, .dest = MAYEND, .action = end_action},
+    {.when = is_any, .dest = ERRST, .action = err_action},
 };
-
-static const struct parser_state_transition ST_OPERATION[] = {
-    {.when = is_letter, .dest = OPERATION, .action = operation_action},
-    {.when = is_space, .dest = OBJECT_CODE, .action = def_action},
-    {.when = is_any, .dest = ERRST, .action = def_action},
+static const struct parser_state_transition ST_TOKEN_1[] = {
+    {.when = is_alphanumeric, .dest = TOKEN_2, .action = token_action},
+    {.when = is_lf, .dest = MAYEND, .action = end_action},
+    {.when = is_any, .dest = ERRST, .action = err_action},
 };
-
-static const struct parser_state_transition ST_OBJECT_CODE[] = {
-    {.when = is_letter, .dest = OBJECT_CODE, .action = object_code_action},
+static const struct parser_state_transition ST_TOKEN_2[] = {
+    {.when = is_alphanumeric, .dest = TOKEN_3, .action = token_action},
+    {.when = is_lf, .dest = MAYEND, .action = end_action},
+    {.when = is_any, .dest = ERRST, .action = err_action},
+};
+static const struct parser_state_transition ST_TOKEN_3[] = {
+    {.when = is_alphanumeric, .dest = TOKEN_4, .action = token_action},
+    {.when = is_lf, .dest = MAYEND, .action = end_action},
+    {.when = is_any, .dest = ERRST, .action = err_action},
+};
+static const struct parser_state_transition ST_TOKEN_4[] = {
+    {.when = is_alphanumeric, .dest = TOKEN_5, .action = token_action},
+    {.when = is_lf, .dest = MAYEND, .action = end_action},
+    {.when = is_any, .dest = ERRST, .action = err_action},
+};
+static const struct parser_state_transition ST_TOKEN_5[] = {
+    {.when = is_alphanumeric, .dest = TOKEN_6, .action = token_action},
+    {.when = is_lf, .dest = MAYEND, .action = end_action},
+    {.when = is_any, .dest = ERRST, .action = err_action},
+};
+static const struct parser_state_transition ST_TOKEN_6[] = {
+    {.when = is_alphanumeric, .dest = TOKEN_7, .action = token_action},
+    {.when = is_lf, .dest = MAYEND, .action = end_action},
+    {.when = is_any, .dest = ERRST, .action = err_action},
+};
+static const struct parser_state_transition ST_TOKEN_7[] = {
+    {.when = is_alphanumeric, .dest = TOKEN_8, .action = token_action},
+    {.when = is_lf, .dest = MAYEND, .action = end_action},
+    {.when = is_any, .dest = ERRST, .action = err_action},
+};
+static const struct parser_state_transition ST_TOKEN_8[] = {
+    {.when = is_alphanumeric, .dest = TOKEN_9, .action = token_action},
+    {.when = is_lf, .dest = MAYEND, .action = end_action},
+    {.when = is_any, .dest = ERRST, .action = err_action},
+};
+static const struct parser_state_transition ST_TOKEN_9[] = {
+    {.when = is_alphanumeric, .dest = TOKEN_10, .action = token_action},
+    {.when = is_lf, .dest = MAYEND, .action = end_action},
+    {.when = is_any, .dest = ERRST, .action = err_action},
+};
+static const struct parser_state_transition ST_TOKEN_10[] = {
+    {.when = is_space, .dest = OPERATION_0, .action = def_action},
+    {.when = is_lf, .dest = MAYEND, .action = end_action},
+    {.when = is_any, .dest = ERRST, .action = err_action},
+};
+static const struct parser_state_transition ST_OPERATION_0[] = {
+    {.when = is_letter, .dest = OPERATION_1, .action = operation_action},
+    {.when = is_lf, .dest = MAYEND, .action = end_action},
+    {.when = is_any, .dest = ERRST, .action = err_action},
+};
+static const struct parser_state_transition ST_OPERATION_1[] = {
+    {.when = is_letter, .dest = OPERATION_2, .action = operation_action},
+    {.when = is_lf, .dest = MAYEND, .action = end_action},
+    {.when = is_any, .dest = ERRST, .action = err_action},
+};
+static const struct parser_state_transition ST_OPERATION_2[] = {
+    {.when = is_letter, .dest = OPERATION_3, .action = operation_action},
+    {.when = is_lf, .dest = MAYEND, .action = end_action},
+    {.when = is_any, .dest = ERRST, .action = err_action},
+};
+static const struct parser_state_transition ST_OPERATION_3[] = {
+    {.when = is_space, .dest = OBJECT_CODE_0, .action = def_action},
+    {.when = is_lf, .dest = MAYEND, .action = end_action},
+    {.when = is_any, .dest = ERRST, .action = err_action},
+};
+static const struct parser_state_transition ST_OBJECT_CODE_0[] = {
+    {.when = is_letter, .dest = OBJECT_CODE_1, .action = object_code_action},
+    {.when = is_lf, .dest = MAYEND, .action = end_action},
+    {.when = is_any, .dest = ERRST, .action = err_action},
+};
+static const struct parser_state_transition ST_OBJECT_CODE_1[] = {
+    {.when = is_letter, .dest = OBJECT_CODE_2, .action = object_code_action},
+    {.when = is_lf, .dest = MAYEND, .action = end_action},
+    {.when = is_any, .dest = ERRST, .action = err_action},
+};
+static const struct parser_state_transition ST_OBJECT_CODE_2[] = {
+    {.when = is_letter, .dest = OBJECT_CODE_3, .action = object_code_action},
+    {.when = is_lf, .dest = MAYEND, .action = end_action},
+    {.when = is_any, .dest = ERRST, .action = err_action},
+};
+static const struct parser_state_transition ST_OBJECT_CODE_3[] = {
     {.when = is_space, .dest = ARGUMENT, .action = def_action},
-    {.when = is_any, .dest = ERRST, .action = def_action},
+    {.when = is_lf, .dest = MAYEND, .action = end_action},
+    {.when = is_any, .dest = ERRST, .action = err_action},
 };
-
-static const struct parser_state_transition ST_ARGUMENT[] = {
-    {.when = is_any, .dest = ARGUMENT, .action = argument_action},
-};
-
 static const struct parser_state_transition ST_MAYEND[] = {
-    {.when = is_space, .dest = MAYEND, .action = def_action},
-    {.when = is_any, .dest = ERRST, .action = def_action},
+    {.when = is_lf, .dest = ENDST, .action = err_action},
+    {.when = is_any, .dest = ERRST, .action = end_action},
 };
-
+static const struct parser_state_transition ST_ARGUMENT[] = {
+    {.when = is_printable, .dest = ARGUMENT, .action = argument_action},
+    {.when = is_lf, .dest = MAYEND, .action = end_action},
+    {.when = is_any, .dest = ERRST, .action = err_action},
+};
 static const struct parser_state_transition ST_END[] = {
-    {.when = is_any, .dest = ENDST, .action = end_action},
+    {.when = is_any, .dest = ENDST, .action = def_action},
 };
-
 static const struct parser_state_transition ST_ERR[] = {
-    {.when = is_any, .dest = ERRST, .action = def_action},
+    {.when = is_lf, .dest = MAYEND, .action = end_action},
+    {.when = is_any, .dest = ERRST, .action = err_action},
 };
 
 static const struct parser_state_transition *config_states[] = {
-    ST_TOKEN,
-    ST_OPERATION,
-    ST_OBJECT_CODE,
+    ST_INIT,
+    ST_TOKEN_1,
+    ST_TOKEN_2,
+    ST_TOKEN_3,
+    ST_TOKEN_4,
+    ST_TOKEN_5,
+    ST_TOKEN_6,
+    ST_TOKEN_7,
+    ST_TOKEN_8,
+    ST_TOKEN_9,
+    ST_TOKEN_10,
+    ST_OPERATION_0,
+    ST_OPERATION_1,
+    ST_OPERATION_2,
+    ST_OPERATION_3,
+    ST_OBJECT_CODE_0,
+    ST_OBJECT_CODE_1,
+    ST_OBJECT_CODE_2,
+    ST_OBJECT_CODE_3,
     ST_ARGUMENT,
     ST_MAYEND,
     ST_END,
@@ -211,9 +332,25 @@ static const struct parser_state_transition *config_states[] = {
 };
 
 static const size_t config_states_n[] = {
-    N(ST_TOKEN),
-    N(ST_OPERATION),
-    N(ST_OBJECT_CODE),
+    N(ST_INIT),
+    N(ST_TOKEN_1),
+    N(ST_TOKEN_2),
+    N(ST_TOKEN_3),
+    N(ST_TOKEN_4),
+    N(ST_TOKEN_5),
+    N(ST_TOKEN_6),
+    N(ST_TOKEN_7),
+    N(ST_TOKEN_8),
+    N(ST_TOKEN_9),
+    N(ST_TOKEN_10),
+    N(ST_OPERATION_0),
+    N(ST_OPERATION_1),
+    N(ST_OPERATION_2),
+    N(ST_OPERATION_3),
+    N(ST_OBJECT_CODE_0),
+    N(ST_OBJECT_CODE_1),
+    N(ST_OBJECT_CODE_2),
+    N(ST_OBJECT_CODE_3),
     N(ST_ARGUMENT),
     N(ST_MAYEND),
     N(ST_END),
@@ -225,7 +362,7 @@ const parser_automaton config_parser_automaton = {
     .states_count = N(config_states),
     .states = config_states,
     .states_n = config_states_n,
-    .start_state = TOKEN,
+    .start_state = INIT,
     .init = config_parser_init,
     .copy = config_parser_copy,
     .reset = config_parser_reset,

@@ -91,6 +91,7 @@ parser_state parser_feed(parserADT p, uint8_t c)
             else if (resp == PARSER_ERROR)
             {
                 p->parser_state = PARSER_ERROR;
+                return PARSER_ERROR;
             }
             else if (resp == PARSER_ACTION)
             {

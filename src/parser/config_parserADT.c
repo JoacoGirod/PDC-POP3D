@@ -7,6 +7,7 @@
 #include "config_parserADT.h"
 #include "config_parser_automaton.h"
 
+#define MAX_BYTES_NAMES 128
 // Define the valid object codes for SET and GET
 #define SET_AND_GET_OBJECT_CODES "BUF", "LGF", "MDF", "ATT"
 #define GET_ONLY_OBJECT_CODES "HTU", "CCU", "BTF"
@@ -30,12 +31,14 @@
 #define SUC_INF "+SUC Valid object codes: INF, HTU, CCU, BTF, BUF | LGF, MDF, ATT, TRF, TFN\n"
 
 #define ERR_INVALID_AUTH_TOKEN "-ERR Invalid authorization token\n"
-#define ERR_AUTH_TOKEN_LENGHT "-ERR New authorization token must be 10 characters long\n"
+#define ERR_AUTH_TOKEN_LENGTH "-ERR New authorization token must be 10 characters long\n"
 #define ERR_EXECUTING_COMMAND "-ERR Error executing command\n"
 #define ERR_INVALID_OBJECT_CODE "-ERR Invalid object code\n"
 #define ERR_SECOND_COMMAND_GET_SET "-ERR Second command must be GET or SET\n"
 #define ERR_ARGUMENT_EXPECTED_SET "-ERR Argument expected for SET command\n"
 #define ERR_NO_ARGUMENT_EXPECTED_GET "-ERR No argument expected for GET command\n"
+#define ERR_UNKNOWN_COMMAND "-ERR Unknown command\n"
+bool validate_arg_size(char *arg, Logger *logger, const pUDPClientInfo client_info);
 
 // --------------------------------------------- ACTIONS ---------------------------------------------
 int getbuf_action(char *argument, Logger *logger, const pUDPClientInfo client_info, struct GlobalConfiguration *g_conf, struct GlobalStatistics *g_stats)
@@ -49,6 +52,7 @@ int getbuf_action(char *argument, Logger *logger, const pUDPClientInfo client_in
 }
 int getlgf_action(char *argument, Logger *logger, const pUDPClientInfo client_info, struct GlobalConfiguration *g_conf, struct GlobalStatistics *g_stats)
 {
+    // menor igual a 64 mayor a 0
     send_data_udp(logger, client_info, SUC_LOGS_FOLDER);
     send_data_udp(logger, client_info, g_conf->logs_folder);
     send_data_udp(logger, client_info, "\n");
@@ -56,6 +60,7 @@ int getlgf_action(char *argument, Logger *logger, const pUDPClientInfo client_in
 }
 int getmdf_action(char *argument, Logger *logger, const pUDPClientInfo client_info, struct GlobalConfiguration *g_conf, struct GlobalStatistics *g_stats)
 {
+    // menor igual a 64 (mayor a 0)
     send_data_udp(logger, client_info, SUC_MAILDIR_FOLDER);
     send_data_udp(logger, client_info, g_conf->maildir_folder);
     send_data_udp(logger, client_info, "\n");
@@ -82,6 +87,10 @@ int gettfn_action(char *argument, Logger *logger, const pUDPClientInfo client_in
 }
 int settfn_action(char *argument, Logger *logger, const pUDPClientInfo client_info, struct GlobalConfiguration *g_conf, struct GlobalStatistics *g_stats)
 {
+    if (!validate_arg_size(argument, logger, client_info))
+    {
+        return 1;
+    }
     strcpy(g_conf->transformation_script, argument);
     send_data_udp(logger, client_info, SUC_NEW_TRANSFORMATION_FUNCTION);
     send_data_udp(logger, client_info, g_conf->transformation_script);
@@ -90,6 +99,10 @@ int settfn_action(char *argument, Logger *logger, const pUDPClientInfo client_in
 }
 int setlgf_action(char *argument, Logger *logger, const pUDPClientInfo client_info, struct GlobalConfiguration *g_conf, struct GlobalStatistics *g_stats)
 {
+    if (!validate_arg_size(argument, logger, client_info))
+    {
+        return 1;
+    }
     strcpy(g_conf->logs_folder, argument);
     send_data_udp(logger, client_info, SUC_NEW_LOGS_FOLDER);
     send_data_udp(logger, client_info, g_conf->logs_folder);
@@ -98,6 +111,10 @@ int setlgf_action(char *argument, Logger *logger, const pUDPClientInfo client_in
 }
 int setmdf_action(char *argument, Logger *logger, const pUDPClientInfo client_info, struct GlobalConfiguration *g_conf, struct GlobalStatistics *g_stats)
 {
+    if (!validate_arg_size(argument, logger, client_info))
+    {
+        return 1;
+    }
     strcpy(g_conf->maildir_folder, argument);
     g_conf->maildir_folder[strlen(argument)] = '\0';
     send_data_udp(logger, client_info, SUC_NEW_MAILDIR_FOLDER);
@@ -109,7 +126,7 @@ int setatt_action(char *argument, Logger *logger, const pUDPClientInfo client_in
 {
     if (strlen(argument) - 1 != 10)
     {
-        send_data_udp(logger, client_info, ERR_AUTH_TOKEN_LENGHT);
+        send_data_udp(logger, client_info, ERR_AUTH_TOKEN_LENGTH);
     }
     else
     {
@@ -181,8 +198,18 @@ int gettrf_action(char *argument, Logger *logger, const pUDPClientInfo client_in
 }
 int config_default_action(char *argument, Logger *logger, const pUDPClientInfo client_info, struct GlobalConfiguration *g_conf, struct GlobalStatistics *g_stats)
 {
-    send_data_udp(logger, client_info, "Invalid command\n");
+    send_data_udp(logger, client_info, "-ERR Unknown command\n");
     return 0;
+}
+
+bool validate_arg_size(char *arg, Logger *logger, const pUDPClientInfo client_info)
+{
+    if (strlen(arg) <= 0 || strlen(arg) > MAX_BYTES_NAMES)
+    {
+        send_data_udp(logger, client_info, "Argument must be between 1 and 128 characters\n");
+        return false;
+    }
+    return true;
 }
 
 typedef int (*command_action)(char *argument, Logger *logger, const pUDPClientInfo client_info, struct GlobalConfiguration *g_conf, struct GlobalStatistics *g_stats);
@@ -396,12 +423,10 @@ int config_parse_input(Logger *logger, const pUDPClientInfo client_info, uint8_t
 
     // Input string to simulate parsing
     size_t input_length = u_strlen(input);
-
     // Feed each character to the parser
     for (size_t i = 0; i < input_length; i++)
     {
         parser_state result = parser_feed(config_parser, input[i]);
-
         if (result == PARSER_FINISHED)
         {
             log_message(logger, INFO, CONFIGPARSER, " - Parser finished");
@@ -409,8 +434,10 @@ int config_parse_input(Logger *logger, const pUDPClientInfo client_info, uint8_t
         }
         else if (result == PARSER_ERROR)
         {
+            send_data_udp(logger, client_info, ERR_UNKNOWN_COMMAND);
+            parser_destroy(config_parser);
             log_message(logger, ERROR, CONFIGPARSER, " - Parser finished");
-            break;
+            return 0;
         }
     }
 
