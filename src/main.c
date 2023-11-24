@@ -256,10 +256,8 @@ finally:
     {
         sem_destroy(&g_conf->users[i].semaphore);
     }
-    // if (conf_server_6 >= 0)
-    // {
-    //     close(pop3_server_6);
-    // }
+
+    free_all_loggers();
 
     return ret;
 }

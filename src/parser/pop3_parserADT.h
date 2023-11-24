@@ -17,6 +17,7 @@ typedef struct Connection *pconn;
 #define MAX_COMMAND_LENGTH 255  // octets
 #define MAX_RESPONSE_LENGTH 512 // octets
 #define BUFFER_SIZE 1024
+#define MAX_BYTES 32768 // 2 to the power of 15
 
 int parse_input(const uint8_t *input, pconn conn);
 

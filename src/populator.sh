@@ -124,7 +124,7 @@ create_maildir_structure() {
 # Create Maildir structure and populate with sample emails
 create_maildir_structure
 
-# Create a 100MB file using dd command
-dd if=/dev/urandom of=/tmp/testuser/Maildir/cur/large_email bs=4096 count=25600
+# Create a 50MB file with printable ASCII using base64
+base64 /dev/urandom | head -c 50M >/tmp/testuser/Maildir/cur/large_email
 
-echo "100MB file created successfully."
+echo "50MB file created successfully."

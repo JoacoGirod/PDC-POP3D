@@ -80,9 +80,10 @@ struct Connection
     size_t num_emails;
     char username[MAX_USERNAME_LENGTH];
     enum ConnectionStatus status;
-    uint8_t read_buff[BUFFER_SIZE];
-    uint8_t write_buff[BUFFER_SIZE];
-    uint8_t file_buff[BUFFER_SIZE];
+    unsigned long long thread_number;
+    uint8_t read_buff[MAX_BYTES];
+    uint8_t write_buff[MAX_BYTES];
+    uint8_t file_buff[MAX_BYTES];
     buffer info_file_buff;
     buffer info_read_buff;
     buffer info_write_buff;

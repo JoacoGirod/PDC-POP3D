@@ -48,15 +48,15 @@ usage(const char *progname)
     fprintf(stderr,
             "Usage: %s [OPTION]...\n"
             "\n"
-            "   -h               Prints help.\n"
-            "   -l <POP3 addr>   Address where the POP3 Server will be served.\n"
-            "   -L <conf addr>   Address where the Configuration Service will be served.\n"
-            "   -p <POP3 port>   POP3 Server connection port.\n"
-            "   -P <conf port>   Configuration Service port.\n"
-            "   -u <name>:<pass> User and Password for the POP3 Server (max 10).\n"
-            "   -v               Prints version info.\n"
-            "   -d <mail addr>   Prints version info.\n"
-            "   -t '<transformation script>' Defines the transoformation script to be applied.\n"
+            "   -h                              Prints help.\n"
+            "   -l <POP3 addr>                  Address where the POP3 Server will be served.\n"
+            "   -L <conf addr>                  Address where the Configuration Service will be served.\n"
+            "   -p <POP3 port>                  POP3 Server connection port.\n"
+            "   -P <conf port>                  Configuration Service port.\n"
+            "   -u <name>:<pass>                User and Password for the POP3 Server (max 10).\n"
+            "   -v                              Prints version info.\n"
+            "   -d <mail addr>                  Prints version info.\n"
+            "   -t '<transformation script>'    Defines the transoformation script to be applied.\n"
             "\n",
             progname);
     exit(1);
@@ -72,7 +72,7 @@ void parse_args(const int argc, char **argv, Logger *logger)
     g_conf->pop3_port = 1110;
 
     g_conf->conf_addr = "127.0.0.1";
-    g_conf->conf_port = 8080;
+    g_conf->conf_port = 9090;
 
     int c;
     int nusers = 0;

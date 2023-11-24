@@ -23,10 +23,6 @@ void *serve_pop3_concurrent_blocking(void *server_ptr)
     sprintf(thread_log_file_name, "distributor_thread_%llx.log", (unsigned long long)pthread_self());
     Logger *distributor_thread_logger = initialize_logger(thread_log_file_name);
 
-    // Update Statitics
-    struct GlobalStatistics *g_stat = get_global_statistics();
-    g_stat->total_clients++;
-
     log_message(distributor_thread_logger, INFO, DISTRIBUTORTHREAD, "Awaiting for connections...");
     while (!done)
     {
@@ -34,6 +30,10 @@ void *serve_pop3_concurrent_blocking(void *server_ptr)
         struct sockaddr_in6 caddr;
         socklen_t caddr_len = sizeof(caddr);
         const int client = accept(server, (struct sockaddr *)&caddr, &caddr_len);
+
+        // Update Statitics
+        struct GlobalStatistics *g_stat = get_global_statistics();
+        g_stat->total_clients++;
 
         if (client < 0)
         {
@@ -54,9 +54,9 @@ void *serve_pop3_concurrent_blocking(void *server_ptr)
 
                 c->fd = client;
                 c->addr_len = caddr_len;
-                buffer_init(&c->info_file_buff, BUFFER_SIZE, c->file_buff);
-                buffer_init(&c->info_read_buff, BUFFER_SIZE, c->read_buff);
-                buffer_init(&c->info_write_buff, BUFFER_SIZE, c->write_buff);
+                buffer_init(&c->info_file_buff, MAX_BYTES, c->file_buff);
+                buffer_init(&c->info_read_buff, MAX_BYTES, c->read_buff);
+                buffer_init(&c->info_write_buff, MAX_BYTES, c->write_buff);
                 memcpy(&(c->addr), &caddr, caddr_len);
 
                 if (g_stat->concurrent_clients > MAX_CONCURRENT_USERS)
@@ -92,7 +92,7 @@ void *handle_connection_pthread(void *args)
 
     // Add the Logger to the connection struct
     c->logger = client_thread_logs;
-
+    c->thread_number = tv.tv_sec * THO + tv.tv_usec / THO;
     log_message(client_thread_logs, INFO, THREAD, "Executing Main POP3 Handler");
 
     pthread_detach(pthread_self());
@@ -106,9 +106,7 @@ void pop3_handle_connection(struct Connection *conn)
 {
     log_message(conn->logger, INFO, THREADMAINHANDLER, "Executing Main Thread Handler");
 
-    // Logging Unique Configuration
     struct GlobalConfiguration *g_conf = get_global_configuration();
-    log_message(conn->logger, INFO, THREADMAINHANDLER, "Using buffer size : %d", g_conf->buffers_size);
 
     // Update Global Statistics
     struct GlobalStatistics *g_stat = get_global_statistics();
@@ -119,57 +117,59 @@ void pop3_handle_connection(struct Connection *conn)
     send_data(OK_POP3_SERVER_READY, &conn->info_write_buff, conn);
 
     bool error = false;
-    size_t availableSpace;
-    ssize_t bytesRead;
-    int totalBytesRead;
+    size_t available_space;
+    ssize_t bytes_read;
+    int total_bytes_read;
 
     // Maintain the call and response with the client
     do
     {
         log_message(conn->logger, INFO, THREADMAINHANDLER, "Awaiting for Command");
 
-        uint8_t *basePointer = buffer_write_ptr(&conn->info_read_buff, &availableSpace);
-        uint8_t *ptr = basePointer;
-        totalBytesRead = 0;
+        uint8_t *base_pointer = buffer_write_ptr(&conn->info_read_buff, &available_space);
+        uint8_t *ptr = base_pointer;
+        total_bytes_read = 0;
         do
         {
-            bytesRead = recv(conn->fd, ptr, availableSpace, 0);
-            totalBytesRead += bytesRead;
+            bytes_read = recv(conn->fd, ptr, available_space, 0);
+            total_bytes_read += bytes_read;
 
-            if (totalBytesRead > MAX_COMMAND_LENGTH)
+            if (total_bytes_read > MAX_COMMAND_LENGTH)
             {
-                log_message(conn->logger, ERROR, THREADMAINHANDLER, "Received command exceeds the maximum allowed length, length : %d", totalBytesRead);
+                log_message(conn->logger, INFO, THREADMAINHANDLER, "Received command exceeds the maximum allowed length, length = %d", total_bytes_read);
+                log_message(conn->logger, INFO, THREADMAINHANDLER, "Bytes read on last iteration %d", bytes_read);
+                log_message(conn->logger, INFO, THREADMAINHANDLER, "Read from the socket = %s", (char *)ptr);
                 send_data("-ERR Command exceds buffer size\r\n", &conn->info_write_buff, conn);
                 error = true;
                 break;
             }
 
-            if (bytesRead > 0) // Some bytes read
+            if (bytes_read > 0) // Some bytes read
             {
-                ptr[bytesRead] = '\0'; // Null termination
+                ptr[bytes_read] = '\0'; // Null termination
                 log_message(conn->logger, INFO, THREADMAINHANDLER, "Streamed by TCP: '%s'", ptr);
-                buffer_write_adv(&conn->info_read_buff, bytesRead);             // Advance buffer
-                ptr = buffer_write_ptr(&conn->info_read_buff, &availableSpace); // Update pointer
+                buffer_write_adv(&conn->info_read_buff, bytes_read);             // Advance buffer
+                ptr = buffer_write_ptr(&conn->info_read_buff, &available_space); // Update pointer
 
-                char *commandPtr = strstr((char *)basePointer, "\r\n");
-                while (commandPtr != NULL) // There is a complete command
+                char *command_ptr = strstr((char *)base_pointer, "\r\n");
+                while (command_ptr != NULL) // There is a complete command
                 {
                     // Null-terminate the command (stepping over the \r)
-                    *commandPtr = '\0';
+                    *command_ptr = '\0';
 
                     // Sending the complete command to the parser
-                    log_message(conn->logger, INFO, THREADMAINHANDLER, "Command sent to parser: '%s'", basePointer);
-                    parse_input(basePointer, conn);
+                    log_message(conn->logger, INFO, THREADMAINHANDLER, "Command sent to parser: '%s'", base_pointer);
+                    parse_input(base_pointer, conn);
 
                     // Move to the next command (if any)
-                    basePointer = (uint8_t *)(commandPtr + 2);                      // Move beyond the "\r\n"
-                    ptr = buffer_write_ptr(&conn->info_read_buff, &availableSpace); // Update pointer
+                    base_pointer = (uint8_t *)(command_ptr + 2);                     // Move beyond the "\r\n"
+                    ptr = buffer_write_ptr(&conn->info_read_buff, &available_space); // Update pointer
 
                     // Check if there is another complete command in the remaining data
-                    commandPtr = strstr((char *)basePointer, "\r\n");
+                    command_ptr = strstr((char *)base_pointer, "\r\n");
                 }
             }
-            else if (bytesRead == 0) // Connection loss
+            else if (bytes_read == 0) // Connection loss
             {
                 log_message(conn->logger, INFO, THREADMAINHANDLER, "Connection closed by the client");
                 break;
@@ -183,7 +183,7 @@ void pop3_handle_connection(struct Connection *conn)
         } while (!error); // Continue reading until a complete command is processed
         // we reset the buffer only after the pipelining
         buffer_reset(&conn->info_read_buff);
-    } while (!error && bytesRead > 0);
+    } while (!error && bytes_read > 0);
 
     log_message(conn->logger, INFO, THREADMAINHANDLER, "Closing Connection");
 
@@ -210,10 +210,9 @@ void send_data(const char *data, buffer *p_buffer, struct Connection *conn /*, b
 // Sends data through TCP socket
 void send_n_data(const char *data, size_t length, struct buffer *p_buffer, struct Connection *conn)
 {
-    if (length > 1024)
+    if (length > MAX_BYTES)
     {
         log_message(conn->logger, ERROR, THREADMAINHANDLER, "Data to be sent exceeds the maximum allowed length");
-        // Handle the error, return, or exit as needed
         return;
     }
     size_t available_space;
@@ -221,13 +220,17 @@ void send_n_data(const char *data, size_t length, struct buffer *p_buffer, struc
     if (length > available_space)
     {
         log_message(conn->logger, ERROR, THREADMAINHANDLER, "Insufficient space in the buffer to write data");
-        // Handle the error, return, or exit as needed
         return;
     }
     memcpy(base_pointer, data, length);
     base_pointer[length] = '\0';
     buffer_write_adv(p_buffer, length);
     sock_blocking_write(conn->fd, p_buffer);
+
+    // Update Statitics
+    struct GlobalStatistics *g_stat = get_global_statistics();
+    g_stat->bytes_transfered += length;
+
     buffer_reset(p_buffer);
 }
 

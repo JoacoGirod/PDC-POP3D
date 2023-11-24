@@ -96,7 +96,7 @@ int pass_action(struct Connection *conn, char *argument)
                     snprintf(filePath, filePathLength, "%s/%s/%s", gConf->mailroot_folder, conn->username, gConf->maildir_folder);
                     filePath[filePathLength] = '\0';
                     retrieve_emails(filePath, conn);
-                    log_message(gConf->user_access_log, INFO, CONNECTION, "Thread[%llx]: User '%s' logged successfully", (unsigned long long)pthread_self(), conn->username);
+                    log_message(gConf->user_access_log, INFO, CONNECTION, "Thread[%lld]: User '%s' logged successfully", conn->thread_number, conn->username);
                     return 1;
                 }
                 else
@@ -230,8 +230,6 @@ int transform_completion(struct Connection *conn, char *filePath, struct Mail *m
 
     if (child_pid == 0) // Child process
     {
-        log_message(logger, DEBUG, COMMAND_HANDLER, " Im a happy child!");
-
         // Close the writing end of the pipe
         close(pipe_fd[1]);
 
@@ -249,31 +247,27 @@ int transform_completion(struct Connection *conn, char *filePath, struct Mail *m
         execl("/bin/sh", "sh", "-c", g_conf->transformation_script, (char *)NULL);
 
         // If execl fails
-        perror("execl failed");
+        log_message(logger, ERROR, COMMAND_HANDLER, "execl() failed");
+
         exit(EXIT_FAILURE);
     }
     else // Parent process
     {
-        log_message(logger, DEBUG, COMMAND_HANDLER, " Im a sad parent!");
-
         // Close the reading end of the pipe
         close(pipe_fd[0]);
 
         // Open the file for reading
         FILE *file = fopen(filePath, "r");
-        log_message(logger, ERROR, COMMAND_HANDLER, " FILE PATH %s", filePath);
         if (file == NULL)
         {
             log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: Error opening mail file");
             return -1;
         }
 
-        // Read from the file and write to the transformation program
+        // Read from the file and write to the transformation program with byte stuffing
         char buffer[BUFFER_SIZE];
         while (fgets(buffer, sizeof(buffer), file) != NULL)
         {
-            log_message(logger, DEBUG, COMMAND_HANDLER, " Sending Information!");
-
             // Check for lines ending with '\r\n.\r\n'
             size_t bytesRead = strlen(buffer);
             char *line = buffer;
@@ -333,6 +327,16 @@ int retr_action(struct Connection *conn, char *argument)
         log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: RETR command in AUTHORIZATION state forbidden");
         return -1;
     }
+    // gets the email index and subtracts 1 because mails are numbered
+    int mailIndex = atoi(argument) - 1;
+    // checks if the emailIndex is valid
+    if ((size_t)mailIndex >= conn->num_emails || mailIndex < 0)
+    {
+        // invalid email index
+        send_data(ERR_INVALID_EMAIL_INDEX_RESPONSE, &conn->info_write_buff, conn);
+        log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: User entered an invalid email index");
+        return 1;
+    }
     // Check if the argument is a valid number
     size_t len = strlen(argument);
     size_t digit_len = strspn(argument, "0123456789");
@@ -345,17 +349,6 @@ int retr_action(struct Connection *conn, char *argument)
         return 1;
     }
     log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Retr action started");
-
-    // gets the email index and subtracts 1 because mails are numbered
-    size_t mailIndex = atoi(argument) - 1;
-    // checks if the emailIndex is valid
-    if (mailIndex >= conn->num_emails)
-    {
-        // invalid email index
-        send_data(ERR_INVALID_EMAIL_INDEX_RESPONSE, &conn->info_write_buff, conn);
-        log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: User entered an invalid email index");
-        return 1;
-    }
 
     struct Mail *mail = &conn->mails[mailIndex];
 
@@ -370,7 +363,10 @@ int retr_action(struct Connection *conn, char *argument)
     if (g_conf->transformation)
     {
         log_message(logger, DEBUG, COMMAND_HANDLER, " - RETR Transformacion!");
-
+        // sends initial response
+        char initial[MAX_RESPONSE_LENGTH];
+        size_t initialLength = sprintf(initial, "+OK %zu octets\r\n", mail->octets);
+        send_n_data(initial, initialLength, &conn->info_write_buff, conn);
         if (transform_completion(conn, filePath, mail) == -1)
         {
             log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: Error transforming mail");
@@ -393,62 +389,102 @@ int retr_action(struct Connection *conn, char *argument)
         send_n_data(initial, initialLength, &conn->info_write_buff, conn);
 
         log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Printing mail data to client");
-
-        // reads the file and sends it to the client
-
-        char *buffer = NULL; // Dynamic buffer
-        size_t buffer_size = 0;
-        size_t buffer_capacity = 0;
-
-        char line[BUFFER_SIZE];
-
-        // Read lines until the end of the file
-        while (fgets(line, sizeof(line), file) != NULL)
+        if (mail->octets > MAX_BYTES)
         {
-            size_t bytesRead = strlen(line);
+            log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Tretating mail as large");
 
-            // Allocate or resize the buffer if needed
-            if (buffer_size + bytesRead >= buffer_capacity)
+            // reads the file and sends it to the client
+            char buffer[BUFFER_SIZE];
+
+            while (fgets(buffer, sizeof(buffer), file) != NULL)
             {
-                buffer_capacity += BUFFER_SIZE;
-                buffer = realloc(buffer, buffer_capacity);
-                if (buffer == NULL)
+                // Check for lines ending with '\r\n.\r\n'
+                size_t bytesRead = strlen(buffer);
+                char *line = buffer;
+                char *nextLine;
+
+                while ((nextLine = strstr(line, "\r\n")) != NULL)
                 {
-                    perror("Error reallocating memory");
-                    fclose(file);
-                    free(buffer);
-                    return 1;
-                }
-            }
+                    nextLine += 2; // Move past the CRLF
 
-            // Copy the line to the buffer
-            strcpy(buffer + buffer_size, line);
-            buffer_size += bytesRead;
+                    // Check if the line ends with '\r\n.\r\n'
+                    if (nextLine[0] == '.' && nextLine[1] == '\r' && nextLine[2] == '\n' && (nextLine[3] == '\r' || nextLine[3] == '\n' || nextLine[3] == '\0'))
+                    {
+                        // Byte-stuff the line
+                        memmove(nextLine + 1, nextLine, strlen(nextLine) + 1);
+                        nextLine[0] = '.';
+                    }
 
-            // Check for lines ending with '\r\n.\r\n'
-            char *line_ptr = buffer;
-            char *nextLine;
+                    // Send the modified line to the client
+                    send_n_data(line, nextLine - line, &conn->info_write_buff, conn);
 
-            while ((nextLine = strstr(line_ptr, "\r\n")) != NULL)
-            {
-                nextLine += 2; // Move past the CRLF
-
-                // Check if the line ends with '\r\n.\r\n'
-                if (nextLine[0] == '.' && nextLine[1] == '\r' && nextLine[2] == '\n' && (nextLine[3] == '\r' || nextLine[3] == '\n' || nextLine[3] == '\0'))
-                {
-                    // Byte-stuff the line
-                    memmove(nextLine + 1, nextLine, strlen(nextLine) + 1);
-                    nextLine[0] = '.';
+                    // Move to the next line
+                    line = nextLine;
                 }
 
-                // Send the modified line to the client
-                line_ptr = nextLine;
+                // Send the remaining data after byte stuffing
+                send_n_data(line, bytesRead - (line - buffer), &conn->info_write_buff, conn);
             }
         }
-        buffer[buffer_size - 1] = '\0';
-        send_n_data(buffer, buffer_size - 1, &conn->info_write_buff, conn);
+        else // NO TRANSFORMATIONS
+        {
 
-        free(buffer);
+            // reads the file and sends it to the client
+
+            char *buffer = NULL; // Dynamic buffer
+            size_t buffer_size = 0;
+            size_t buffer_capacity = 0;
+
+            char line[MAX_BYTES];
+
+            // Read lines until the end of the file
+            while (fgets(line, sizeof(line), file) != NULL)
+            {
+                size_t bytesRead = strlen(line);
+
+                // Allocate or resize the buffer if needed
+                if (buffer_size + bytesRead >= buffer_capacity)
+                {
+                    buffer_capacity += MAX_BYTES;
+                    buffer = realloc(buffer, buffer_capacity);
+                    if (buffer == NULL)
+                    {
+                        perror("Error reallocating memory");
+                        fclose(file);
+                        free(buffer);
+                        return 1;
+                    }
+                }
+
+                // Copy the line to the buffer
+                strcpy(buffer + buffer_size, line);
+                buffer_size += bytesRead;
+
+                // Check for lines ending with '\r\n.\r\n'
+                char *line_ptr = buffer;
+                char *nextLine;
+
+                while ((nextLine = strstr(line_ptr, "\r\n")) != NULL)
+                {
+                    nextLine += 2; // Move past the CRLF
+
+                    // Check if the line ends with '\r\n.\r\n'
+                    if (nextLine[0] == '.' && nextLine[1] == '\r' && nextLine[2] == '\n' && (nextLine[3] == '\r' || nextLine[3] == '\n' || nextLine[3] == '\0'))
+                    {
+                        // Byte-stuff the line
+                        memmove(nextLine + 1, nextLine, strlen(nextLine) + 1);
+                        nextLine[0] = '.';
+                    }
+
+                    // Send the modified line to the client
+                    line_ptr = nextLine;
+                }
+            }
+            buffer[buffer_size - 1] = '\0';
+            send_n_data(buffer, buffer_size - 1, &conn->info_write_buff, conn);
+
+            free(buffer);
+        }
         log_message(logger, INFO, COMMAND_HANDLER, " - RETR: Mail data printed to client");
 
         // closes file
@@ -486,15 +522,14 @@ int dele_action(struct Connection *conn, char *argument)
         return -1;
     }
 
-    size_t mailIndex = atoi(argument) - 1;
-
+    int mailIndex = atoi(argument) - 1;
     // checks if the emailIndex is valid
-    if (mailIndex >= conn->num_emails)
+    if ((size_t)mailIndex >= conn->num_emails || mailIndex < 0)
     {
         // invalid email index
         send_data(ERR_INVALID_EMAIL_INDEX_RESPONSE, &conn->info_write_buff, conn);
-        log_message(logger, ERROR, COMMAND_HANDLER, " - DELE: User entered invalid email index");
-        return -1;
+        log_message(logger, ERROR, COMMAND_HANDLER, " - RETR: User entered an invalid email index");
+        return 1;
     }
 
     // sets the mail status to DELETED

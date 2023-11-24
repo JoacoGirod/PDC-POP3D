@@ -25,6 +25,9 @@
 #define SUC_NEW_TRANSFORMATION_FALSE "+SUC Transformation set: false\n"
 #define SUC_TRANSFORMATION_TRUE "+SUC Transformation active: true\n"
 #define SUC_TRANSFORMATION_FALSE "+SUC Transformation active: false\n"
+#define SUC_TRANSFORMATION_FUNCTION "+SUC Transformation function: "
+#define SUC_NEW_TRANSFORMATION_FUNCTION "+SUC New transformation function: "
+#define SUC_INF "+SUC Valid object codes: INF, HTU, CCU, BTF, BUF | LGF, MDF, ATT, TRF, TFN\n"
 
 #define ERR_INVALID_AUTH_TOKEN "-ERR Invalid authorization token\n"
 #define ERR_AUTH_TOKEN_LENGHT "-ERR New authorization token must be 10 characters long\n"
@@ -65,15 +68,26 @@ int getatt_action(char *argument, Logger *logger, const pUDPClientInfo client_in
     send_data_udp(logger, client_info, "\n");
     return 0;
 }
-int setbuf_action(char *argument, Logger *logger, const pUDPClientInfo client_info, struct GlobalConfiguration *g_conf, struct GlobalStatistics *g_stats)
+int getinf_action(char *argument, Logger *logger, const pUDPClientInfo client_info, struct GlobalConfiguration *g_conf, struct GlobalStatistics *g_stats)
 {
-    g_conf->buffers_size = atoi(argument);
-    send_data_udp(logger, client_info, SUC_NEW_BUFF_SIZE);
-    send_data_udp(logger, client_info, argument);
+    send_data_udp(logger, client_info, SUC_INF);
+    return 0;
+}
+int gettfn_action(char *argument, Logger *logger, const pUDPClientInfo client_info, struct GlobalConfiguration *g_conf, struct GlobalStatistics *g_stats)
+{
+    send_data_udp(logger, client_info, SUC_TRANSFORMATION_FUNCTION);
+    send_data_udp(logger, client_info, g_conf->transformation_script);
     send_data_udp(logger, client_info, "\n");
     return 0;
 }
-
+int settfn_action(char *argument, Logger *logger, const pUDPClientInfo client_info, struct GlobalConfiguration *g_conf, struct GlobalStatistics *g_stats)
+{
+    strcpy(g_conf->transformation_script, argument);
+    send_data_udp(logger, client_info, SUC_NEW_TRANSFORMATION_FUNCTION);
+    send_data_udp(logger, client_info, g_conf->transformation_script);
+    send_data_udp(logger, client_info, "\n");
+    return 0;
+}
 int setlgf_action(char *argument, Logger *logger, const pUDPClientInfo client_info, struct GlobalConfiguration *g_conf, struct GlobalStatistics *g_stats)
 {
     strcpy(g_conf->logs_folder, argument);
@@ -194,9 +208,15 @@ struct command config_commands[] = {
     {.name = "GETATT",
      .accept_arguments = hasnt_argument,
      .action = getatt_action},
-    {.name = "SETBUF",
+    {.name = "GETINF",
+     .accept_arguments = hasnt_argument,
+     .action = getinf_action},
+    {.name = "GETTFN",
+     .accept_arguments = hasnt_argument,
+     .action = gettfn_action},
+    {.name = "SETTFN",
      .accept_arguments = has_argument,
-     .action = setbuf_action},
+     .action = settfn_action},
     {.name = "SETLGF",
      .accept_arguments = has_argument,
      .action = setlgf_action},
@@ -230,8 +250,10 @@ typedef enum
     GETBUF = 0,
     GETLGF,
     GETMDF,
-    GETATTATT,
-    SETBUF,
+    GETATT,
+    GETINF,
+    GETTFN,
+    SETTFN,
     SETLGF,
     SETMDF,
     SETATT,
@@ -249,6 +271,8 @@ typedef enum
     LGF,
     MDF,
     ATT,
+    INF,
+    TFN,
     HTU,
     CCU,
     BTF,
@@ -265,7 +289,7 @@ typedef enum
 static bool is_valid_token(const char *token, Logger *logger, const pUDPClientInfo client_info, struct GlobalConfiguration *g_conf)
 {
     // Handle authorization token
-    if (strncmp(g_conf->authorization_token, token, 10) != 0)
+    if (strlen(token) != 10 || strncmp(g_conf->authorization_token, token, 10) != 0)
     {
         // Authorization token is invalid
         send_data_udp(logger, client_info, ERR_INVALID_AUTH_TOKEN);
@@ -320,6 +344,12 @@ static bool is_valid_object_code(const char *object_code, Logger *logger, const 
             break;
         case ATT:
             enum_name = "ATT";
+            break;
+        case INF:
+            enum_name = "INF";
+            break;
+        case TFN:
+            enum_name = "TFN";
             break;
         case HTU:
             enum_name = "HTU";
