@@ -11,9 +11,8 @@ server_port=1110
 for ((i = 1; i <= num_users; i++)); do
   # Attempt connection using netcat
   nc -C $server_host $server_port &
-    echo "User $i connected."
-  # Sleep for a short duration to avoid overwhelming the system
-  sleep 0.1
+  echo "User $i connected."
+  sleep 0.02
 done
 
 # Wait for all background processes to finish

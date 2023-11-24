@@ -3,7 +3,7 @@
 #define THO 1000
 #define OK_POP3_SERVER_READY "+OK POP3 server ready (^-^)\r\n"
 #define ERR_HIGH_DEMAND "-ERR Connection refused due to high demand (^-^)\r\n"
-#define MAX_LOG_FILE_SHORT 50
+#define MAX_LOG_FILE_SHORT 60
 
 static bool done = false;
 void sigterm_handler(const int signal)
@@ -87,7 +87,7 @@ void *handle_connection_pthread(void *args)
     struct timeval tv;
     gettimeofday(&tv, NULL);
     char thread_log_filename[MAX_LOG_FILE_SHORT];
-    sprintf(thread_log_filename, "client_thread_%lld.log", (long long)tv.tv_sec * THO + tv.tv_usec / THO);
+    sprintf(thread_log_filename, "client_thread_%d_%lld.log", c->fd, (long long)tv.tv_sec * THO + tv.tv_usec / THO);
     Logger *client_thread_logs = initialize_logger(thread_log_filename);
 
     // Add the Logger to the connection struct
